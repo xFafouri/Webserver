@@ -11,6 +11,6 @@ It supports essential features like:
 
 This project was built from scratch to better understand low-level networking, HTTP protocols, and server design.
 
-> 🔧 **Language:** C++98  
+> 🔧 **Language:** C++98
 > 📡 **Sockets API:** `poll()`  
 > 📁 **Standard:** RFC 2616 (HTTP/1.1)
