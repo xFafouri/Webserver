@@ -8,17 +8,15 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include "Server.hpp"
 
 class Parser
 {
     protected:
         std::vector<std::string> tokens;
     public:
+        std::vector<Server> servers;
         void    parsing(char *fileName);
+        void    parse();
 };
 
-
-class listen : public Parser
-{
-    
-};

@@ -1,4 +1,4 @@
-#include "server.hpp"
+#include "parser.hpp"
 
 void    Parser::parsing(char *fileName)
 {
@@ -39,11 +39,37 @@ void    Parser::parsing(char *fileName)
         for(size_t i = 0; i < tokens.size(); i++)
         {
             std::cout << tokens[i] << std::endl;
-        } 
+        }
+        file.close();
+        parse();
     }
     else
     {
         std::cout << "Failed to open file." << std::endl;
     }
-    file.close();
+}
+
+void    Parser::parse()
+{
+    Server server;
+    Location location;
+    size_t i = 0;
+
+    while (i < tokens.size())
+    {
+        if (tokens[i] == "server")
+        {
+            i++;
+            if (tokens[i] != "{")
+            {
+                std::cerr << "Expected '{' after 'server'\n";
+                return;
+            }
+            i++;
+            if (server.parsServer(tokens, i) == true)
+            {
+                servers.push_back(server);
+            }
+        }
+    }
 }
