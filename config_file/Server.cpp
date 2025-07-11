@@ -75,7 +75,18 @@ bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
         }
         else if (tokens[index] == "error_page")
         {
-            
+            index++;
+            std::vector<int> codes;
+            size_t pos = index;
+            while (index < tokens.size() && tokens.back() != ";")
+                pos++;
+            if (pos == tokens.size())
+                throw  std::runtime_error("Missing ';' at end of error_page directive");
+            std::string testing = tokens[pos];
+            if (testing == )
         }
     }
 }
+
+
+
