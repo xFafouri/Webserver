@@ -38,6 +38,7 @@ int main()
                     Client* A = sock.sock_map[fd];
                     if (!A->read_from_fd(fd))
                     {
+                        close(fd);
                         delete A;
                         sock.sock_map.erase(fd);
                         epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, &sock.client_events);
@@ -51,6 +52,7 @@ int main()
                     Client* A = sock.sock_map[fd];
                     if (!A->write_to_fd(fd))
                     {
+                        close(fd);
                         delete A;
                         sock.sock_map.erase(fd);
                         epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, &sock.client_events);
@@ -61,18 +63,6 @@ int main()
                 // sock.sock_map.insert(std::make_pair(client,A));   
             }
         }
-        // \r\n
-        /*
-            user=hamza&password=fafouri&test
-
-            =>
-                user -> hamza
-                password -> fafouri
-                test
-
-            uri -> 2048
-            GET ////////// HTTP/1.1
-        */
     }
     return 0;
 }
