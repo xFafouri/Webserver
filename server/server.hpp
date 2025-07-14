@@ -14,12 +14,15 @@ class HandleReq {
     public:
         // req line
         std::string method;
-        std::string url;
+        std::string uri;
         std::string http_v;
+        std::map<std::string,std::string> map_header;
+        std::map<std::string,std::string> body_map;
         // Headers
-        std::map<std::string,std::string> Header;
+        // std::map<std::string,std::string> Header;
         // Body
         size_t content_length;
+        std::string content_type;
         std::string transfer_encoding;
 
 };
@@ -43,7 +46,10 @@ class Client
         bool response_sent;
         bool read_from_fd(int client_fd);
         bool write_to_fd(int client_fd);
-        ~Client();
+        std::string trim(std::string str);
+        bool check_methods();
+
+        // ~Client();
 
 };
 
