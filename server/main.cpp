@@ -38,6 +38,7 @@ int main()
                     Client* A = sock.sock_map[fd];
                     if (!A->read_from_fd(fd))
                     {
+                        std::cout << "TEST" << std::endl;
                         close(fd);
                         delete A;
                         sock.sock_map.erase(fd);
