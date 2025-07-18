@@ -1,17 +1,19 @@
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include "server.hpp"
 #include <fcntl.h>
+#include <stdexcept>
 #include <string>
+#include <sys/types.h>
 #include <unordered_map>
 #include <utility>
 
 #include <fstream>
-#include <sstream>
 #include <vector>
-#include <string>
+
 // bool check_methods()
 // {
 //     std::string methods[3] = {"GET","POST", "DELETE"};
@@ -77,7 +79,12 @@ void read_from_fd(int client_fd)
     // if (read_buffer.find("\r\n\r\n") == std::string::npos)
     //     return;
 
-        // ** Json
+    // content-length | transfer-encoding : ...chunked
+    /*
+        size CRLF
+        DATA CRLF
+    */
+        //  Json
     // read_buffer =
     //     "POST /index.html HTTP/1.1\r\n"
     //     "Host: example.com\r\n"
@@ -93,30 +100,47 @@ void read_from_fd(int client_fd)
     //     "  \"more\": \"data\"\n"
     //     "}";
     
-            //**application/x-www-form-urlencoded**
-    read_buffer =
+    //application/x-www-form-urlencoded
+       
+    //MULTIPART
+    // read_buffer =
+    //     "POST /upload HTTP/1.1\r\n"
+    //     "Host: example.com\r\n"
+    //     "User-Agent: curl/7.68.0\r\n"
+    //     "Accept: */*\r\n"
+    //     "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Length: 314\r\n"
+    //     "\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Disposition: form-data; name=\"firstName\"\r\n"
+    //     "\r\n"
+    //     "Brian\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+    //     "Content-Type: text/plain\r\n"
+    //     "\r\n"
+    //     "Hello, this is the content of the file.\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
+        
+        // TRANSFER ENCODING : CHUNCKED 
+        read_buffer =
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "User-Agent: curl/7.68.0\r\n"
         "Accept: */*\r\n"
-        "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Length: 345\r\n"
-        "\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Disposition: form-data; name=\"firstName\"\r\n"
-        "\r\n"
-        "Brian\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+        "Transfer-Encoding: chunked\r\n"
         "Content-Type: text/plain\r\n"
         "\r\n"
-        "Hello, this is the content of the file.\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
-            // **multipart/form-data**
-    
+        "7\r\n"
+        "Mozilla\r\n"
+        "9\r\n"
+        "Developer\r\n"
+        "0\r\n"
+        "Network\r\n"
+        "0\r\n"
+        "\r\n";
 
-
-
+        // **multipart/form-data**
 
     // std::cout << read_buffer  << std::endl;
     size_t pos = read_buffer.find("\r\n");
@@ -142,6 +166,8 @@ void read_from_fd(int client_fd)
             std::string value = header_line.substr(sep + 1);
             key = trim(key);
             value = trim(value);
+            // std::cout << "Key :" <<  key << std::endl;
+            // std::cout << "value :"  << value << std::endl;
             map_header.insert(std::make_pair(key, value));
         }
     }
@@ -158,33 +184,91 @@ void read_from_fd(int client_fd)
     std::istringstream dd(body);
 
     //check content-type 
-
     
-
+    
+    
     int content_length = 0;
     std::string content_type;
-
+    
     if (map_header.find("Content-Type") != map_header.end()) 
     {
-       content_type = map_header["Content-Type"];
+        content_type = map_header["Content-Type"];
     }
     std::cout << "content_type = *" << content_type << "*" << std::endl;
     // check content type / 
     //
+    std::vector<std::pair<int, std::string> > chunks;
+
     if (method == "POST")
     {
         if (map_header.find("Content-Length") != map_header.end()) 
         {
-            std::string len_str = map_header["Content-Length"];
-            content_length = std::atoi(len_str.c_str());
+            std::string str = map_header["Content-Length"];
+            content_length = std::atoi(str.c_str());
         }
+        
+        else if (map_header.find("Transfer-Encoding") != map_header.end())
+        {
+            std::string str = map_header["Transfer-Encoding"];
+            if (str.find("chunked") != std::string::npos)
+            {
+                std::cout << "Chunked transfer detected.\n";
+
+                size_t pos = 0;
+                while (true)
+                {
+                    size_t size_end = body.find("\r\n", pos);
+                    if (size_end == std::string::npos)
+                        return ;
+
+                    std::string size_str = body.substr(pos, size_end - pos);
+                    int chunk_size = std::atoi(size_str.c_str());
+
+                    pos = size_end + 2;
+                    if (chunk_size == 0 && body.find("\r\n\r\n", pos))
+                        break ;
+                    if (body.size() < pos + chunk_size + 2)
+                        throw std::out_of_range("Incomplete chunk data or missing CRLF");
+
+                    std::string chunk_data = body.substr(pos, chunk_size);
+
+                    try 
+                    {
+                        if (body.substr(pos + chunk_size, 2) != "\r\n")
+                            throw std::out_of_range("Missing CRLF after chunk data");
+                    }
+                    catch (std::out_of_range &e)
+                    {
+                        std::cout << e.what() << std::endl;
+                    }
+
+                    chunks.push_back(std::make_pair(chunk_size, chunk_data));
+
+                    pos += chunk_size + 2;
+                }
+                
+                for (size_t i = 0; i < chunks.size(); ++i)
+                {
+                    std::cout << "Chunk " << i << ": size=" << chunks[i].first
+                            << ", data=\"" << chunks[i].second << "\"\n";
+                }
+            }
+        }
+
         // check Transfer-Encoding
     }
+
+    //
+
+
+
+
+    //
     std::cout << "content_length = " << content_length << std::endl;
 
     if (content_type.find("application/json") == 0 || content_type == "text/plain")
     {
-        std::string file_path = "/tmp/request_client_fd";
+        std::string file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
         std::ofstream outfile(file_path.c_str());
         if (outfile.is_open()) 
         {
@@ -239,44 +323,100 @@ void read_from_fd(int client_fd)
     }
     else if (content_type.find("multipart/form-data") == 0)
     {
-
         std::cout << "multipart" << std::endl;
         std::string boundary = "--" + content_type.substr(content_type.find("=") + 1,  content_type.back()) + "\r\n";
         // std::string boundary = content_type.substr(content_type.find("=") + 1);
         // std::string boundary = "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
         std::cout << "boundary = " << boundary << std::endl;
         std::cout << "body = " << body << std::endl;
-        
 
         std::vector<std::string> body_vector = split(body, boundary);
-        
+
+        std::string filename;
+        std::string name;
+        std::string content;
         std::vector<std::string>::iterator it = body_vector.begin();
         for(;it != body_vector.end(); it++)
         {
-            if (*it == "--" || *it == "" || *it == "\r\n\r\n")
+            if (*it == "")
                 continue;
-            if (*it == "Content-Disposition:")
+            std::string part = *it;
+            size_t disp_pos = part.find("Content-Disposition:");
+            if (disp_pos != std::string::npos)
             {
-                
+                size_t name_pos = part.find("filename=\"", disp_pos);
+                if (name_pos != std::string::npos)
+                {
+                    name_pos += 10;
+                    size_t end_quote = part.find("\"", name_pos);
+                    if (end_quote != std::string::npos)
+                    {
+                        filename = part.substr(name_pos, end_quote - name_pos);
+                        std::cout << "filename = " << filename << std::endl;
+                    }
+                    //find /r/n/r/n 
+                    size_t pos = part.find("\r\n\r\n");
+                    if (pos != std::string::npos)
+                    {
+                        size_t end = part.find("\r\n");
+                        part =  part.substr(pos + 4, end - 1);
+                        std::cout << "Part = " << part;
+                    }
+                    std::string file_path = "/tmp/" + filename;
+                    std::ofstream outfile(file_path.c_str());
+                    if (outfile.is_open()) 
+                    {
+                        outfile << part;
+                        outfile.close();
+                    }
+                }
+                else 
+                {
+                    size_t name_pos = part.find("name=\"", disp_pos);
+                    if (name_pos != std::string::npos)
+                    {
+                        name_pos += 6;
+                        size_t end_quote = part.find("\"", name_pos);
+                        if (end_quote != std::string::npos)
+                        {
+                            name = part.substr(name_pos, end_quote - name_pos);
+                            std::cout << "name = " << name << std::endl;
+                        }
+                    }
+                    //
+                    size_t pos = part.find("\r\n\r\n");
+                    if (pos != std::string::npos)
+                    {
+                        size_t end = part.find("\r\n");
+                        content = part.substr(pos + 4, end - 1);
+                        std::string file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
+                        std::ofstream outfile(file_path.c_str());
+                        if (outfile.is_open()) 
+                        {
+                            outfile << content;
+                            outfile.close();
+                        }
+                        std::cout << "content = " << content;
+                    }
+                    // store the content in map
+                    // std::map<std::string,std::string> multipart_body;
+                    // multipart_body.insert(std::make_pair(name, content));
+                }
             }
+            // find /r/n/r/n
+            // size_t pos = part.find("\r\n\r\n");
+            // if (pos != std::string::npos)
+            // {
+            //     size_t end = part.find("\r\n");
+            //     part = part.substr(pos + 4, end - 1);
+            //     std::cout << "Part = " << part;
+            // }
+            ///-------------
             std::cout << "body vector = " << *it << std::endl;
-        }
+            }
         // std::stringstream pair_stream(body_line);
     
     }
-
-    // else if (content_type.find("text/plain") == 0 || content_type.empty())
-    // {
-    //     // raw string
-
-    // }
-    // else
-    // {
-    //     // multipart and else 
-    // }
-    // std::cout << "Content_length = " << content_length << std::endl;
-
-    // check methods
 
     std::map<std::string,std::string>::iterator itt = body_map.begin();
 

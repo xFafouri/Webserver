@@ -1,6 +1,7 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include <codecvt>
 #include <cstddef>
 #include <cstring>
 #include <iostream>
@@ -10,12 +11,24 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+
+class Header{
+    std::string method;
+    std::string uri;
+    std::string http_v;
+    std::map<std::string,std::string> map_header;
+
+};
+
+
 class HandleReq {
     public:
         // req line
+        Header Hr;
         std::string method;
         std::string uri;
         std::string http_v;
+        
         std::map<std::string,std::string> map_header;
         std::map<std::string,std::string> body_map;
         // Headers
