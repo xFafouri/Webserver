@@ -85,20 +85,20 @@ void read_from_fd(int client_fd)
         DATA CRLF
     */
         //  Json
-    // read_buffer =
-    //     "POST /index.html HTTP/1.1\r\n"
-    //     "Host: example.com\r\n"
-    //     "User-Agent: curl/7.68.0\r\n"
-    //     "Accept: */*\r\n"
-    //     "Content-Type: application/json\r\n"
-    //     "Content-Length: 89\r\n"
-    //     "\r\n"
-    //     "{\n"
-    //     "  \"firstName\": \"Brian\",\n"
-    //     "  \"lastName\": \"Smith\",\n"
-    //     "  \"email\": \"bsmth@example.com\",\n"
-    //     "  \"more\": \"data\"\n"
-    //     "}";
+    read_buffer =
+       "POST /index.html HTTP/1.1\r\n"
+       "Host: example.com\r\n"
+       "User-Agent: curl/7.68.0\r\n"
+       "Accept: */*\r\n"
+       "Content-Type: application/json\r\n"
+       "Content-Length: 89\r\n"
+        "\r\n"
+       "{\n"
+       "  \"firstName\": \"Brian\",\n"
+       "  \"lastName\": \"Smith\",\n"
+       "  \"email\": \"bsmth@example.com\",\n"
+       "  \"more\": \"data\"\n"
+       "}";
     
     //application/x-www-form-urlencoded
        
@@ -151,7 +151,6 @@ void read_from_fd(int client_fd)
     size_t p = read_buffer.find("\r\n\r\n");
 
     std::string body = read_buffer.substr(p + 4, read_buffer.size() - 1);
-
 
     // std::map<std::string,std::string>::iterator s;
     std::istringstream ss(headers);
