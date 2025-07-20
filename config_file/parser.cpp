@@ -36,10 +36,10 @@ void    Parser::parsing(char *fileName)
                 tokens.push_back(token);
 
         }
-        for(size_t i = 0; i < tokens.size(); i++)
-        {
-            std::cout << tokens[i] << std::endl;
-        }
+        // for(size_t i = 0; i < tokens.size(); i++)
+        // {
+        //     std::cout << tokens[i] << std::endl;
+        // }
         file.close();
         parse();
     }
@@ -51,8 +51,6 @@ void    Parser::parsing(char *fileName)
 
 void    Parser::parse()
 {
-    Server server;
-    Location location;
     size_t i = 0;
 
     while (i < tokens.size())
@@ -66,10 +64,15 @@ void    Parser::parse()
                 return;
             }
             i++;
+                Server server;
             if (server.parsServer(tokens, i) == true)
             {
                 servers.push_back(server);
             }
         }
+        i++;
     }
+    servers[0].printf_server();
+    std::cout << "======= here =========\n";
+    servers[1].printf_server();
 }
