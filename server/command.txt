@@ -1,0 +1,13 @@
+// multipart 
+
+curl -v -X POST http://localhost:8081 \
+  -H "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW" \
+  -H "Content-Length: 300" \
+  --data-binary @multipart.txt
+
+// json 
+
+ curl -v -X POST http://localhost:8081 \
+  -H "Content-Type: application/json" \                                                   
+  -H "Content-Length: 300" \
+  -d @data.json 

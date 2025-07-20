@@ -31,20 +31,41 @@ class Header
         bool parsed = false;
 };
 
-class Body 
-{
+// class Body 
+// {
+//     public:
+//         std::string data;
+//         size_t expected_size = 0;
+//         bool complete = false;
+//         bool chunked = false;
+//         size_t chunk_pos = 0;
+
+//         void append(const std::string& new_data) 
+//         {
+//             data += new_data;
+//         }
+// };
+
+class Body {
     public:
         std::string data;
+        std::string _body;
         size_t expected_size = 0;
         bool complete = false;
         bool chunked = false;
-        size_t chunk_pos = 0;
 
         void append(const std::string& new_data) 
         {
             data += new_data;
         }
+        bool needs_more_data() const 
+        {
+            return !complete && (!chunked && data.size() < expected_size);
+        }
+
 };
+
+
 
 class HandleReq 
 {
@@ -68,10 +89,6 @@ class HandleReq
 
 };
 
-class HandleRes
-{
-
-};
 
 
 
@@ -80,7 +97,7 @@ class Client
     public:
         Client();
         HandleReq Hreq;
-        HandleRes Hres;
+        // HandleRes Hres;
         std::string read_buffer;
         std::string write_buffer;
         bool request_received = false;;
