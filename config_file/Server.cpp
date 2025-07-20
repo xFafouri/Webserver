@@ -80,6 +80,11 @@ void Server::printf_server()
         std::cout << it->first << " --> " << it->second << std::endl;
     }
 
+    for(size_t i = 0; i < locations.size(); i++)
+    {
+        std::cout << "..... location .........\n";
+        locations[i].print_location();
+    }
 }
 
 bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
@@ -140,8 +145,6 @@ bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
             // After loop, we must be at the semicolon
             if (tokens[index] != ";")
                 throw std::runtime_error("Missing ';' at the end of server_name directive");
-        
-            // index++; // Move past the semicolon
         }
         else if (tokens[index] == "error_page")
         {
@@ -197,7 +200,7 @@ bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
             if (tokens[index + 1] != "{")
                 throw std::runtime_error("error for parsing your location must has a '{' ");
             if (location.parser_location(index, tokens) == true)
-                locations[tokens[index]] = location;
+                locations.push_back(location);
         }
         else if (tokens[index] == "}")
             return true;

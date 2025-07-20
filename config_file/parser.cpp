@@ -75,4 +75,6 @@ void    Parser::parse()
     servers[0].printf_server();
     std::cout << "======= here =========\n";
     servers[1].printf_server();
+    std::cout << "======= here =========\n";
+    servers[2].printf_server();
 }
