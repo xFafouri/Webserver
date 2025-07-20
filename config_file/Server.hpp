@@ -17,7 +17,7 @@ class Server
     std::vector<std::string> server_names;
     std::map<int, std::string> error_pages;
     long client_max_body_size;
-    std::map<std::string,Location> locations;
+    std::vector<Location> locations;
 
     Server();
     bool parsServer(std::vector<std::string>, size_t &index);
