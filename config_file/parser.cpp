@@ -1,10 +1,16 @@
 #include "parser.hpp"
+#include <stdexcept>
 
 void    Parser::parsing(char *fileName)
 {
     std::ifstream file(fileName);
     if (file.is_open())
     {
+        if (file.peek() == std::ifstream::traits_type::eof())
+        {
+            file.close();
+            throw std::runtime_error("Error: Config file is empty!");
+        }
         std::string line;
         while (std::getline(file, line))
         {
@@ -73,8 +79,8 @@ void    Parser::parse()
         i++;
     }
     servers[0].printf_server();
-    std::cout << "======= here =========\n";
-    servers[1].printf_server();
-    std::cout << "======= here =========\n";
-    servers[2].printf_server();
+    // std::cout << "======= here =========\n";
+    // servers[1].printf_server();
+    // std::cout << "======= here =========\n";
+    // servers[2].printf_server();
 }
