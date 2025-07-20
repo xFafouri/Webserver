@@ -1,4 +1,4 @@
-SRC = main.cpp Server.cpp parser.cpp Location.cpp
+SRC = main.cpp Server.cpp parser.cpp Location.cpp Cgi.cpp
 
 OBJ = $(SRC:.cpp=.o)
 

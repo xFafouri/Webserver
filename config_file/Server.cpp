@@ -40,11 +40,11 @@ static bool    check_is_body_size(std::string string)
     return true;
 }
 
-static long ft_atoi(const char *str)
+static long long ft_atoi(const char *str)
 {
     int	i;
-	long	sign;
-	long	factorial;
+	long long	sign;
+	long long	factorial;
 
 	i = 0;
 	sign = 1;
@@ -87,7 +87,7 @@ void Server::printf_server()
     }
 }
 
-bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
+bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
 {
     for(;index < tokens.size(); index++)
     {
@@ -148,50 +148,29 @@ bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
         }
         else if (tokens[index] == "error_page")
         {
-            index++;
-            std::vector<int> codes;
-            std::string uri;
-
-            // Loop until we find the ";" token
-            while (index < tokens.size() && tokens[index] != ";")
-            {
-                if (isdigit(tokens[index][0])) // must to check all the string
-                {
-                    codes.push_back(std::atoi(tokens[index].c_str()));
-                }
-                else
-                {
-                    uri = tokens[index]; // This should be the URI string
-                }
-                index++;
-            }
-
-            if (index == tokens.size() || tokens[index] != ";")
-                throw std::runtime_error("Missing ';' at end of error_page directive");
-            
-            // Save error pages into your map<int, string>
-            for (size_t i = 0; i < codes.size(); ++i)
-                error_pages[codes[i]] = uri;
-            
-            // index++; // Move past the semicolon
+            if (tokens[index + 3] != ";")
+                throw std::runtime_error("Missing ';' at the end of Error page directive");
+            if (check_is_digit(tokens[index + 1]) == true)
+                error_pages.insert(std::make_pair(ft_atoi(tokens[index + 1].c_str()), tokens[index + 2]));
+            else
+                throw std::runtime_error("ERROR Parsing for Error_page directive");
+            index += 3;
         }
         else if (tokens[index] == "client_max_body_size")
         {
             if (tokens[index + 2] != ";")
-                throw std::runtime_error("Error for parsing3");
+                throw std::runtime_error("Missing ';' at the end of client max body size directive");
             index++;
             if (check_is_body_size(tokens[index]))
             {
                 client_max_body_size = ft_atoi(tokens[index].c_str());
                 client_max_body_size *= 1048576;
-                // std::cout << client_max_body_size << " <--here\n";
             }
             else 
             {
                 throw std::runtime_error("client max body size is not an integer");
             }
             index += 1;
-            // std::cout << "here\n";
         }
         else if (tokens[index] == "location")
         {
@@ -202,7 +181,7 @@ bool    Server::parsServer(std::vector<std::string> tokens, size_t &index)
             if (location.parser_location(index, tokens) == true)
                 locations.push_back(location);
         }
-        else if (tokens[index] == "}")
+        else if (tokens[index] == "}" && (tokens[index + 1] == "server" || index + 1 == tokens.size()))
             return true;
         else
             throw std::runtime_error("Error for parsing4");

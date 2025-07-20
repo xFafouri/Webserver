@@ -16,10 +16,10 @@ class Server
     std::string host;
     std::vector<std::string> server_names;
     std::map<int, std::string> error_pages;
-    long client_max_body_size;
+    long long client_max_body_size;
     std::vector<Location> locations;
 
     Server();
-    bool parsServer(std::vector<std::string>, size_t &index);
+    bool parsServer(std::vector<std::string> &tokens, size_t &index);
     void printf_server();
 };
