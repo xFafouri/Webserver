@@ -1,6 +1,7 @@
 #pragma once 
 
 #include <algorithm>
+#include "Server.hpp"
 #include <ctime>
 #include <stdexcept>
 #include <utility>
@@ -8,7 +9,9 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
-#include "Server.hpp"
+#include <cstdlib>
+
+class Server;
 
 class Parser
 {
