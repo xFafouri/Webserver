@@ -104,11 +104,38 @@ bool Client::read_from_fd(int client_fd)
     // if (read_buffer.find("\r\n\r\n") == std::string::npos)
     //     return;
 
-    // std::cout << read_buffer  << std::endl;
-    std::cout << "read_buffer = " << read_buffer << std::endl;
+    // read_buffer =
+    //     "POST /upload HTTP/1.1\r\n"
+    //     "Host: example.com\r\n"
+    //     "User-Agent: curl/7.68.0\r\n"
+    //     "Accept: */*\r\n"
+    //     "Transfer-Encoding: chunked\r\n"
+    //     "Content-Type: text/plain\r\n"
+    //     "\r\n"
+    //     "7\r\n"
+    //     "Mozilla\r\n"
+    //     "9\r\n"
+    //     "Developer\r\n"
+    //     "7\r\n"
+    //     "Network\r\n"
+    //     "0\r\n"
+    //     "\r\n";
+    std::string boundary;
+
+
     size_t pos = read_buffer.find("\r\n");
     if (pos == std::string::npos)
         return -1;
+    std::string request_line = read_buffer.substr(0, pos);
+    std::string headers = read_buffer.substr(pos + 2, read_buffer.find("\r\n\r\n") - (pos + 2));
+    size_t p = read_buffer.find("\r\n\r\n");
+
+
+    Hreq.body._body = read_buffer.substr(p + 4, read_buffer.size() - 1);
+    std::cout << "read_buffer = " << read_buffer << std::endl;
+    std::cout <<  "BODY = " << Hreq.body._body << std::endl;
+
+    // Hreq.buffer = read_buffer.substr(p + 4, read_buffer.size() - 1);
     std::cout << "1*" << std::endl;
     if (!Hreq.header.parsed)
     {
@@ -125,7 +152,7 @@ bool Client::read_from_fd(int client_fd)
             {
                 std::string key = header_line.substr(0, sep);
                 std::string value = header_line.substr(sep + 1);
-                trim(key);
+                trim(key);  
                 trim(value);
                 Hreq.map_header.insert(std::make_pair(key, value));
             }
@@ -170,8 +197,8 @@ bool Client::read_from_fd(int client_fd)
     // Parse body depend of chunked or expected_size
     if (Hreq.header.parsed) 
     {
-        size_t p = read_buffer.find("\r\n\r\n");
-        Hreq.buffer  = read_buffer.substr(p + 2, read_buffer.size() - 1);
+        // size_t p = read_buffer.find("\r\n\r\n");
+        // Hreq.body._body  = read_buffer.substr(p + 2, read_buffer.size() - 1);
         
         std::istringstream dd(Hreq.buffer);
         if (Hreq.body.chunked) 
@@ -183,24 +210,26 @@ bool Client::read_from_fd(int client_fd)
                 size_t pos = 0;
                 while (true)
                 {
-                    size_t size_end = Hreq.buffer.find("\r\n", pos);
+                    size_t size_end = Hreq.body._body.find("\r\n", pos);
                     if (size_end == std::string::npos)
                         return -1;
 
-                    std::string size_str = Hreq.buffer.substr(pos, size_end - pos);
+                    std::string size_str = Hreq.body._body.substr(pos, size_end - pos);
                     int chunk_size = std::atoi(size_str.c_str());
 
                     pos = size_end + 2;
-                   if (chunk_size == 0 && Hreq.buffer.find("\r\n\r\n", pos) != std::string::npos)
+                   if (chunk_size == 0 && Hreq.body._body.find("\r\n\r\n", pos) != std::string::npos)
                         break;
-                    if (Hreq.buffer.size() < pos + chunk_size + 2)
+                    if (Hreq.body._body.size() < pos + chunk_size + 2)
                         throw std::out_of_range("Incomplete chunk data or missing CRLF");
 
-                    std::string chunk_data = Hreq.buffer.substr(pos, chunk_size);
+                    std::string chunk_data = Hreq.body._body.substr(pos, chunk_size);
+                    std::cout << "chunk_data = " << chunk_data << std::endl;
+                    std::cout << "chunk_size = " << chunk_size << std::endl;
 
                     try 
                     {
-                        if (Hreq.buffer.substr(pos + chunk_size, 2) != "\r\n")
+                        if (Hreq.body._body.substr(pos + chunk_size, 2) != "\r\n")
                             throw std::out_of_range("Missing CRLF after chunk data");
                     }
                     catch (std::out_of_range &e)
@@ -213,7 +242,8 @@ bool Client::read_from_fd(int client_fd)
                     std::ofstream outfile(file_path.c_str());
                     if (outfile.is_open()) 
                     {
-                        outfile  << Hreq.buffer;
+                        outfile  << Hreq.body._body;
+                        // outfile  << chunk_data;
                         outfile.close();
                     }
                     pos += chunk_size + 2;
@@ -222,13 +252,15 @@ bool Client::read_from_fd(int client_fd)
         }
         else if (Hreq.body.expected_size > 0) 
         {
-            
-            size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.buffer.size());
-            Hreq.buffer.append(Hreq.buffer.substr(0, to_read));
-            Hreq.buffer.erase(0, to_read);
-            std::cout << "body = " << Hreq.buffer << std::endl;
-            std::cout << "TEST" << std::endl;
-            std::cout << "content_type" <<  Hreq.content_type << std::endl;
+            // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.body._body.size());
+            // Hreq.body.append(Hreq.body._body.substr(0, to_read));
+            // Hreq.body._body.erase(0, to_read);
+
+            // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.buffer.size());
+            // Hreq.buffer.append(Hreq.buffer.substr(0, to_read));
+            // Hreq.buffer.erase(0, to_read);
+            std::cout << "body = " << Hreq.body._body << std::endl;
+            std::cout << "content_type = " <<  Hreq.content_type << std::endl;
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
                 std::cout << "app/json" << std::endl;
@@ -236,17 +268,21 @@ bool Client::read_from_fd(int client_fd)
                 std::ofstream outfile(file_path.c_str());
                 if (outfile.is_open()) 
                 {
-                    outfile << Hreq.buffer;
+                    outfile << Hreq.body._body;
                     outfile.close();
                 }
             }
             else if (Hreq.content_type.find("application/x-www-form-urlencoded") == 0)
             {
                 // std::cout << "urlencoded" << std::endl;
-                std::string body_line;
-                std::getline(dd, body_line);
+                size_t p = read_buffer.find("\r\n\r\n");
+                if (p != std::string::npos)
+                    Hreq.body._body += read_buffer.substr(p + 4);
 
-                std::stringstream pair_stream(body_line);
+                std::string body_line;
+                std::getline(dd, Hreq.body._body);
+
+                std::stringstream pair_stream(Hreq.body._body);
                 std::string pair;
 
                 while (std::getline(pair_stream, pair, '&'))
@@ -262,15 +298,43 @@ bool Client::read_from_fd(int client_fd)
             }
             else if (Hreq.content_type.find("multipart/form-data") == 0)
             {
+                // std::cout << "| " << Hreq.body._body << " |" << std::endl;
+                
+                // Hreq.body._body =
+                // "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+                // "Content-Disposition: form-data; name=\"firstName\"\r\n"
+                // "\r\n"
+                // "Brian\r\n"
+                // "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+                // "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+                // "Content-Type: text/plain\r\n"
+                // "\r\n"
+                // "Hello, this is the content of the file.\r\n"
+                // "------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
+
+                size_t pos = Hreq.content_type.find("boundary=");
+                if (pos == std::string::npos) 
+                {
+                    return -1;
+                }
+                boundary = "--" + Hreq.content_type.substr(pos + 9);
+                // boundary = "--" + Hreq.content_type.substr(Hreq.content_type.find("=") + 1,  Hreq.content_type.back()) + "\r\n";
+                std::vector<std::string> body_vector = spliting(Hreq.body._body, boundary);
                 std::cout << "multipart" << std::endl;
+                std::cout << "boundary = " << boundary << std::endl;
                 std::cout << "content-type = " << Hreq.content_type << std::endl;
                 // std::string boundary = "--" + Hreq.content_type.substr(Hreq.content_type.find("=") + 1,  Hreq.content_type.back()) + "\r\n";
-                std::string boundary = Hreq.content_type.substr(Hreq.content_type.find("=") + 1);
+                // std::string boundary = Hreq.content_type.substr(Hreq.content_type.find("=") + 1);
+                // size_t pos = Hreq.content_type.find("boundary=");
+                // if (pos != std::string::npos) 
+                // {
+                //     boundary = "--" + Hreq.content_type.substr(pos + 9);
+                //     std::cout << "boundary = " << boundary << std::endl;
+                //     // std::vector<std::string> body_vector = spliting(Hreq.buffer, boundary);
+                // }
                 // std::string boundary = "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
-                std::cout << "boundary = " << boundary << std::endl;
                 // std::cout << "body = " << Hreq.buffer << std::endl;
 
-                std::vector<std::string> body_vector = spliting(Hreq.buffer, boundary);
 
                 std::string filename;
                 std::string name;
@@ -304,6 +368,7 @@ bool Client::read_from_fd(int client_fd)
                             }
                             std::string file_path = "/tmp/" + filename;
                             std::ofstream outfile(file_path.c_str());
+                            std::cout << "part = " << part << std::endl;
                             if (outfile.is_open()) 
                             {
                                 outfile << part;

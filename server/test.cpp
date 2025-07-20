@@ -85,60 +85,60 @@ void read_from_fd(int client_fd)
         DATA CRLF
     */
         //  Json
-    read_buffer =
-       "POST /index.html HTTP/1.1\r\n"
-       "Host: example.com\r\n"
-       "User-Agent: curl/7.68.0\r\n"
-       "Accept: */*\r\n"
-       "Content-Type: application/json\r\n"
-       "Content-Length: 89\r\n"
-        "\r\n"
-       "{\n"
-       "  \"firstName\": \"Brian\",\n"
-       "  \"lastName\": \"Smith\",\n"
-       "  \"email\": \"bsmth@example.com\",\n"
-       "  \"more\": \"data\"\n"
-       "}";
+    // read_buffer =
+    //    "POST /index.html HTTP/1.1\r\n"
+    //    "Host: example.com\r\n"
+    //    "User-Agent: curl/7.68.0\r\n"
+    //    "Accept: */*\r\n"
+    //    "Content-Type: application/json\r\n"
+    //    "Content-Length: 89\r\n"
+    //     "\r\n"
+    //    "{\n"
+    //    "  \"firstName\": \"Brian\",\n"
+    //    "  \"lastName\": \"Smith\",\n"
+    //    "  \"email\": \"bsmth@example.com\",\n"
+    //    "  \"more\": \"data\"\n"
+    //    "}";
     
     //application/x-www-form-urlencoded
        
-    //MULTIPART
-    // read_buffer =
-    //     "POST /upload HTTP/1.1\r\n"
-    //     "Host: example.com\r\n"
-    //     "User-Agent: curl/7.68.0\r\n"
-    //     "Accept: */*\r\n"
-    //     "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-    //     "Content-Length: 314\r\n"
-    //     "\r\n"
-    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-    //     "Content-Disposition: form-data; name=\"firstName\"\r\n"
-    //     "\r\n"
-    //     "Brian\r\n"
-    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-    //     "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
-    //     "Content-Type: text/plain\r\n"
-    //     "\r\n"
-    //     "Hello, this is the content of the file.\r\n"
-    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
-        
-        // TRANSFER ENCODING : CHUNCKED 
-        read_buffer =
+    // MULTIPART
+    read_buffer =
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "User-Agent: curl/7.68.0\r\n"
         "Accept: */*\r\n"
-        "Transfer-Encoding: chunked\r\n"
+        "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+        "Content-Length: 314\r\n"
+        "\r\n"
+        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+        "Content-Disposition: form-data; name=\"firstName\"\r\n"
+        "\r\n"
+        "Brian\r\n"
+        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+        "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
         "Content-Type: text/plain\r\n"
         "\r\n"
-        "7\r\n"
-        "Mozilla\r\n"
-        "9\r\n"
-        "Developer\r\n"
-        "0\r\n"
-        "Network\r\n"
-        "0\r\n"
-        "\r\n";
+        "Hello, this is the content of the file.\r\n"
+        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
+        
+        // TRANSFER ENCODING : CHUNCKED 
+        // read_buffer =
+        // "POST /upload HTTP/1.1\r\n"
+        // "Host: example.com\r\n"
+        // "User-Agent: curl/7.68.0\r\n"
+        // "Accept: */*\r\n"
+        // "Transfer-Encoding: chunked\r\n"
+        // "Content-Type: text/plain\r\n"
+        // "\r\n"
+        // "7\r\n"
+        // "Mozilla\r\n"
+        // "9\r\n"
+        // "Developer\r\n"
+        // "0\r\n"
+        // "Network\r\n"
+        // "0\r\n"
+        // "\r\n";
 
         // **multipart/form-data**
 
@@ -211,7 +211,7 @@ void read_from_fd(int client_fd)
             std::string str = map_header["Transfer-Encoding"];
             if (str.find("chunked") != std::string::npos)
             {
-                std::cout << "Chunked transfer detected.\n";
+                std::cout << "Chunked transfer detected.\n";    
 
                 size_t pos = 0;
                 while (true)
@@ -363,6 +363,7 @@ void read_from_fd(int client_fd)
                     }
                     std::string file_path = "/tmp/" + filename;
                     std::ofstream outfile(file_path.c_str());
+                    std::cout << "part = " << part << std::endl;
                     if (outfile.is_open()) 
                     {
                         outfile << part;
