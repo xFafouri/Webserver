@@ -10,4 +10,15 @@ curl -v -X POST http://localhost:8081 \
  curl -v -X POST http://localhost:8081 \
   -H "Content-Type: application/json" \                                                   
   -H "Content-Length: 300" \
-  -d @data.json 
+  -d @data.json
+
+
+// chunked
+
+cat chunked.txt | nc localhost 8081
+
+// test server 
+seq 1 10 | xargs -n1 -P10 curl -s http://localhost:8081/
+
+
+

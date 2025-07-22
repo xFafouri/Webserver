@@ -1,67 +1,211 @@
 #include "server.hpp"
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <utility>
 
 
 
+void cleanup_connection(Server& sock, int fd) 
+{
+    close(fd);
+    delete sock.sock_map[fd];
+    sock.sock_map.erase(fd);
+    epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+}
+
+bool is_connection_closed(int fd) 
+{
+    int error = 0;
+    socklen_t errlen = sizeof(error);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &errlen) == -1 || error != 0) {
+        return true;
+    }
+    return false;
+}
+
+void cleanup_connection(Server& sock, int fd, bool remove_file = false) 
+{
+    if (remove_file && sock.sock_map[fd]) {
+        std::remove(sock.sock_map[fd]->file_path.c_str());
+    }
+    close(fd);
+    delete sock.sock_map[fd];
+    sock.sock_map.erase(fd);
+    epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+}
 
 int main()
 {
     Server sock(AF_INET, SOCK_STREAM, 0);
-    while(1)
+    while (1)
     {
-        size_t i = epoll_wait(sock.epoll_fd,sock.events, 1024, -1);
-        // check
-        for (int j = 0; j < i; j++)
+        int num_events = epoll_wait(sock.epoll_fd, sock.events, 1024, 4000);
+        // if (num_events == -1) 
+        // {
+        //     if (errno != EINTR) {
+        //         perror("epoll_wait");
+        //     }
+        //     continue;
+        // }
+
+        for (int j = 0; j < num_events; j++)
         {
-            if (sock.events[j].data.fd == sock.server_fd)
+            int fd = sock.events[j].data.fd;
+            Client* A = sock.sock_map[fd];
+
+            // Handle new connections
+            if (fd == sock.server_fd)
             {
                 sock.client_fd = accept(sock.server_fd, (struct sockaddr*)&sock.address, &sock.addrlen);
-                Client *A = new Client;
-                sock.sock_map.insert(std::make_pair(sock.client_fd,A));
-                sock.client_events.events = EPOLLIN | EPOLLOUT;
-                sock.client_events.data.fd = sock.client_fd;
-                epoll_ctl(sock.epoll_fd, EPOLL_CTL_ADD, sock.client_fd, &sock.client_events);
-                // insert the client in the map 
+                if (sock.client_fd == -1) {
+                    perror("accept");
+                    continue;
+                }
+                
+                fcntl(sock.client_fd, F_SETFL, O_NONBLOCK);
 
+                Client* new_client = new Client;
+                sock.sock_map[sock.client_fd] = new_client;
+
+                struct epoll_event ev;
+                ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+                ev.data.fd = sock.client_fd;
+                if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_ADD, sock.client_fd, &ev) == -1) 
+                {
+                    perror("epoll_ctl ADD");
+                    cleanup_connection(sock, sock.client_fd, true);
+                }
+                continue;
             }
-            // else if (//client does not in the map)
-                // check client if in the map accept() 
-                // continue 
-            else  {
-                if (sock.events[j].events & EPOLLIN)
+
+            // Handle errors
+            if (sock.events[j].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) 
+            {
+                cleanup_connection(sock, fd, true);
+                continue;
+            }
+
+            // Handle read events
+            if (sock.events[j].events & EPOLLIN)
+            {
+                bool connection_ok = true;
+                bool request_complete = false;
+
+                while (true)
                 {
-                    // read from fd function called
-                    int fd = sock.events[j].data.fd;
-                    Client* A = sock.sock_map[fd];
-                    if (!A->read_from_fd(fd))
+                   ssize_t bytes_read = A->read_from_fd(fd);
+                    if (!bytes_read && A->request_received)
                     {
-                        std::cout << "TEST" << std::endl;
-                        close(fd);
-                        delete A;
-                        sock.sock_map.erase(fd);
-                        epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, &sock.client_events);
+                        request_complete = true;
+                        break;
                     }
-                    epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &sock.client_events);
+                    if (bytes_read < 0)
+                    {
+                        if ((errno == EAGAIN || errno == EWOULDBLOCK) && A->request_received)
+                        {
+                            request_complete = true;
+                            break;
+                        }
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
+                            break;
+
+                        connection_ok = false;
+                        break;
+                    }
+                    else if (bytes_read == 0)
+                    {
+                        std::cout << "DEBUG: read_from_fd indicates connection closed\n";
+
+                        // 🛠️🟢 Check if request was fully received *before* closing
+                        if (A->request_received)
+                        {
+                            request_complete = true;
+                        }
+                        else
+                        {
+                            connection_ok = false;
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        if (A->request_received)
+                        {
+                            request_complete = true;
+                            break;
+                        }
+                    }
                 }
-                if (sock.events[j].events & EPOLLOUT)
+                if (!connection_ok)
                 {
-                    // write to fd function called
-                    int fd = sock.events[j].data.fd;
-                    Client* A = sock.sock_map[fd];
-                    if (!A->write_to_fd(fd))
-                    {
-                        close(fd);
-                        delete A;
-                        sock.sock_map.erase(fd);
-                        epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, &sock.client_events);
-                    }
-                    epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &sock.client_events);
+                    cleanup_connection(sock, fd, true);
+                    continue;
                 }
-                // check for the client event after the accept if EPOLLIN read() or  EPOLLOUT recv()
-                // sock.sock_map.insert(std::make_pair(client,A));   
+
+               if (request_complete)
+                {
+                    std::cout << "Request complete, preparing response..." << std::endl;
+                    A->prepare_response();
+
+                    struct epoll_event ev;
+                    ev.events = EPOLLOUT | EPOLLET | EPOLLRDHUP;
+                    ev.data.fd = fd;
+                    if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1)
+                    {
+                        perror("epoll_ctl MOD");
+                        cleanup_connection(sock, fd, true);
+                    }
+                    continue;
+                }
+            }
+
+            // Handle write events
+            if (sock.events[j].events & EPOLLOUT) 
+            {
+                std::cout << "EPOLLOUT event for fd: " << fd << std::endl;
+                bool write_complete = false;
+                bool connection_ok = true;
+                
+                do {
+                    write_complete = A->write_to_fd(fd);
+                    
+                    if (!write_complete) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            std::cout << "Partial write, will continue later" << std::endl;
+                            break;
+                        }
+                        std::cerr << "Write error: " << strerror(errno) << std::endl;
+                        connection_ok = false;
+                        break;
+                    }
+                } while (!write_complete);
+
+                if (!connection_ok) 
+                {
+                    cleanup_connection(sock, fd, true);
+                }
+                else if (write_complete) 
+                {
+                    std::cout << "Response fully sent to fd: " << fd << std::endl;
+                    if (A->Hreq.header.map_header["Connection"] == "close") 
+                    {
+                        cleanup_connection(sock, fd, true);
+                    }
+                    
+                    else {
+                        // Switch back to reading mode
+                        A->reset_for_next_request();
+                        struct epoll_event ev;
+                        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+                        ev.data.fd = fd;
+                        if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1) {
+                            perror("epoll_ctl MOD");
+                            cleanup_connection(sock, fd, true);
+                        }
+                    }
+                }
             }
         }
     }

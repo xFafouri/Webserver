@@ -1,49 +1,10 @@
+
 #include "server.hpp"
-#include <cstddef>
-#include <sstream>
-#include <sys/socket.h>
-
-
-
-Server::Server(int domain, int type, int protocol)
-{
-    // domain = AF_INET;
-    // type = SOCK_STREAM;
-    // protocol = 0;
-
-    server_fd = socket(domain, type, protocol);
-
-    address.sin_family = AF_INET;
-    address.sin_port = htons(8081);
-    address.sin_addr.s_addr = INADDR_ANY;
-
-    int optval = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
-    {
-        perror("setsockopt");
-        close(server_fd);
-        exit(0);
-    }
-    if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)))
-    {
-        perror("");
-        exit(0);
-    }
-    listen(server_fd, 128);
-    epoll_fd = epoll_create(1);
-    server_event.events = EPOLLIN;
-    server_event.data.fd = server_fd;
-    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &server_event);
-    addrlen = sizeof(address);
-
-}
 
 Client::Client()
 {
-    request_received = false;
-    response_sent = false;
-}
 
+}
 std::string Client::trim(std::string str)
 {
     std::string::iterator start = str.begin();
@@ -91,144 +52,65 @@ bool Client::check_methods()
     return false;
 }
 
-void Client::reset_for_next_request() 
+bool Client::handle_chunked_body(int client_fd) 
 {
-    // Reset request parsing state
-    Hreq.header.parsed = false;
-    Hreq.header.method.clear();
-    Hreq.header.uri.clear();
-    Hreq.header.http_v.clear();
-    Hreq.header.map_header.clear();
-    Hreq.header.content_type.clear();
+    (void)client_fd;
 
-    // Reset body handling
-    Hreq.body.raw_body.clear();
-    Hreq.body.data.clear();
-    Hreq.body._body.clear();
-    Hreq.body.expected_size = 0;
-    Hreq.body.chunked = false;
-    Hreq.body.chunk_done = false;
-    Hreq.body.is_done = false;
-    Hreq.body.current_chunk_size = 0;
-    Hreq.body.reading_chunk_size = true;
-
-    read_buffer.clear();
-    Hreq.buffer.clear();
-
-    write_buffer.clear();
-    response_sent = false;
-
-    file_path.clear();
-
-    Hreq.body_map.clear();
-
-    request_received = false;
-}
-void Client::handle_chunked_body() {
-    while (true) {
-        // Step 1: Read chunk size if needed
+    while (!Hreq.body._body.empty()) {
         if (Hreq.body.reading_chunk_size) {
             size_t line_end = Hreq.body._body.find("\r\n");
             if (line_end == std::string::npos) {
-                // Not enough data yet to read chunk size
-                return;
+                return true;
             }
 
             std::string size_str = Hreq.body._body.substr(0, line_end);
-            Hreq.body._body.erase(0, line_end + 2); // remove size line
-
-            Hreq.body.current_chunk_size = std::strtol(size_str.c_str(), nullptr, 16);
-
-            // End of chunks
-            if (Hreq.body.current_chunk_size == 0) {
-                Hreq.body.is_done = true;
-                return;
-            }
-
+            Hreq.body.current_chunk_size = strtoul(size_str.c_str(), nullptr, 16);
+            Hreq.body._body.erase(0, line_end + 2);
             Hreq.body.reading_chunk_size = false;
+
+            if (Hreq.body.current_chunk_size == 0) {
+                // Check for trailers (optional headers after last chunk)
+                if (Hreq.body._body.size() >= 2) {
+                    if (Hreq.body._body.substr(0, 2) == "\r\n") {
+                        // No trailers, just empty line
+                        Hreq.body._body.erase(0, 2);
+                    } else {
+                        // Has trailers - consume until empty line
+                        size_t trailers_end = Hreq.body._body.find("\r\n\r\n");
+                        if (trailers_end != std::string::npos) {
+                            Hreq.body._body.erase(0, trailers_end + 4);
+                        } else {
+                            return true; // Need more data to complete trailers
+                        }
+                    }
+                }
+                Hreq.body.is_done = true;
+                return false; // Chunked transfer complete
+            }
         }
 
-        // Step 2: Read chunk data + trailing \r\n
         if (Hreq.body._body.size() < Hreq.body.current_chunk_size + 2) {
-            // Not enough data yet for full chunk
-            return;
+            return true; // Need more data
         }
 
-        // Extract chunk data
-        Hreq.body.data += Hreq.body._body.substr(0, Hreq.body.current_chunk_size);
-        Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2); // +2 for \r\n
-        Hreq.body.reading_chunk_size = true; // Next iteration will read size again
+        Hreq.body.data.append(Hreq.body._body.substr(0, Hreq.body.current_chunk_size));
+        Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2);
+        Hreq.body.reading_chunk_size = true;
     }
+    return true;
 }
 
-// bool Client::handle_chunked_body() 
-// {
 
-//     while (!Hreq.body._body.empty()) {
-//         if (Hreq.body.reading_chunk_size) {
-//             size_t line_end = Hreq.body._body.find("\r\n");
-//             if (line_end == std::string::npos) 
-//             {
-//                 return true;
-//             }
 
-//             std::string size_str = Hreq.body._body.substr(0, line_end);
-//             Hreq.body.current_chunk_size = strtoul(size_str.c_str(), nullptr, 16);
-//             Hreq.body._body.erase(0, line_end + 2);
-//             Hreq.body.reading_chunk_size = false;
-
-//             if (Hreq.body.current_chunk_size == 0) 
-//             {
-//                 if (Hreq.body._body.size() >= 2) {
-//                     if (Hreq.body._body.substr(0, 2) == "\r\n") 
-//                     {
-//                         Hreq.body._body.erase(0, 2);
-//                     } 
-//                     else 
-//                     {
-//                         size_t trailers_end = Hreq.body._body.find("\r\n\r\n");
-//                         if (trailers_end != std::string::npos) {
-//                             Hreq.body._body.erase(0, trailers_end + 4);
-//                         } else {
-//                             return true;
-//                         }
-//                     }
-//                 }
-//                 Hreq.body.is_done = true;
-//                 return false; 
-//             }
-//         }
-
-//         if (Hreq.body._body.size() < Hreq.body.current_chunk_size + 2) {
-//             return true;
-//         }
-//         Hreq.body.data.append(Hreq.body._body.substr(0, Hreq.body.current_chunk_size));
-//         Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2);
-//         Hreq.body.reading_chunk_size = true;
-//     }
-//     return true;
-// }
-
-size_t Client::read_from_fd(int client_fd)
+bool Client::read_from_fd(int client_fd)
 {
-    char recv_buffer[1024];
+    char recv_buffer[300];
 
-    ssize_t n = recv(client_fd, recv_buffer, sizeof(recv_buffer),0);
+    ssize_t n = read(client_fd, recv_buffer, sizeof(recv_buffer));
     std::cout << "read *from fd " << n << std::endl;
-    
-    if (n == 0) {
-        std::cout << "DEBUG: Client closed connection\n";
-        return 0;
-    }
-    if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::cout << "DEBUG: EAGAIN — try again later\n";
-            return 0;  // Not a fatal error!
-        }
-        std::cout << "DEBUG: Read error: " << strerror(errno) << "\n";
-        return -1;  // Only real errors
-    }
 
+    if (n <= 0)
+        return false;
     //  read_buffer += std::string(recv_buffer, n);
     // if (read_buffer.find("\r\n\r\n") == std::string::npos)
     //     return;
@@ -267,10 +149,8 @@ size_t Client::read_from_fd(int client_fd)
     // std::cout <<  "BODY = " << Hreq.body._body << std::endl;
 
     // Hreq.buffer = read_buffer.substr(p + 4, read_buffer.size() - 1);
-    std::cout << "TEST" << std::endl;
     if (!Hreq.header.parsed)
     {
-        std::cout << "read_buffer = " << read_buffer << std::endl;
         size_t header_end = read_buffer.find("\r\n\r\n");
         if (header_end == std::string::npos) 
         {
@@ -279,8 +159,7 @@ size_t Client::read_from_fd(int client_fd)
         //  Parse the request line
         size_t pos = read_buffer.find("\r\n");
         if (pos == std::string::npos)
-            return -1; //bad request
-        std::cout << "TEST3" << std::endl;
+            return -1; //bad requestclient_fd
         std::string request_line = read_buffer.substr(0, pos);
         std::istringstream iss(request_line);
         iss >> Hreq.method >> Hreq.uri >> Hreq.http_v;
@@ -310,18 +189,14 @@ size_t Client::read_from_fd(int client_fd)
         }
         Hreq.header.parsed = true;
 
-
-        std::cout << "TEST4" << std::endl;
         // check transfer encoding or content-length
         if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end())
         {
-            std::cout << "3*" << std::endl;
             std::string str = Hreq.map_header["Content-Length"];
             Hreq.body.expected_size = std::atoi(str.c_str());
             // Hreq.body.expected_size = std::stoi(Hreq.header.map_header["Content-Length"]);
             if (Hreq.header.map_header.find("Content-Type")  != Hreq.map_header.end()) 
             {
-                std::cout << "here" << std::endl;
                 Hreq.content_type = Hreq.map_header["Content-Type"];
                 Hreq.content_type = trim(Hreq.content_type);
             }
@@ -331,36 +206,19 @@ size_t Client::read_from_fd(int client_fd)
         {
                 Hreq.body.chunked = true;
         }
-        if (!Hreq.body.chunked && Hreq.body.expected_size == 0)
-        {
-            request_received = true;
-            return 0;
-        }
+                
+         // Move remaining data (body) to body buffer
         Hreq.body._body = read_buffer.substr(header_end + 4);
-        // read_buffer.clear(); // ghda ngul lik fin <3
+        read_buffer.clear();
     }
 
-    std::cout << "expected_size = " <<  Hreq.body.expected_size << std::endl;
-    
+    // Parse body depend of chunked or expected_size
     if (Hreq.header.parsed) 
     {
         std::string raw_body;
         std::istringstream dd(Hreq.body._body);
         if (Hreq.body.chunked) 
         {
-            handle_chunked_body();
-            if (Hreq.body.is_done) 
-            {
-                std::ofstream out("/tmp/request_body.txt");
-                out << Hreq.body.data;
-                out.close();
-                Hreq.body.reset();
-                request_received = true;
-            }
-            return !Hreq.body.is_done;
-        }
-        // if (Hreq.body.chunked) 
-        // {
             // while (true) 
             // {
             //     if (Hreq.body.reading_chunk_size) 
@@ -370,14 +228,11 @@ size_t Client::read_from_fd(int client_fd)
             //             return true ; // need more data 
             //         std::string size_str = Hreq.body._body.substr(0, line_end);
             //         Hreq.body.current_chunk_size = std::strtol(size_str.c_str(), nullptr, 16);
-            //         std::cout << "current_chunk_size = 0 " << Hreq.body.current_chunk_size << std::endl;
             //         Hreq.body._body.erase(0, line_end + 2);
-            //         std::cout  << "after erase = " <<  Hreq.body._body << std::endl;
             //         Hreq.body.reading_chunk_size = false;
 
             //         if (Hreq.body.current_chunk_size == 0) 
             //         {
-            //             std::cout << "true" << std::endl;
             //             Hreq.body.is_done = true;
             //             request_received = true;
             //             break;
@@ -395,22 +250,18 @@ size_t Client::read_from_fd(int client_fd)
             //     // std::cout << "body.data = "<<  Hreq.body.data << std::endl;
             //     Hreq.body.reading_chunk_size = true;
             // }
-            // handle_chunked_body();
-            // if (Hreq.body.is_done) 
-            // {
-            //     std::ofstream out("/tmp/request_body.txt");
-            //     out << Hreq.body.data;
-            //     out.close();
-            //     Hreq.body.reset();
-            // }
-        //     return !Hreq.body.is_done;
-        // }
+            handle_chunked_body(client_fd);
+            if (Hreq.body.is_done) 
+            {
+                std::ofstream out("/tmp/request_body.txt");
+                out << Hreq.body.data;
+                out.close();
+                Hreq.body.reset();
+            }
+            return !Hreq.body.is_done;
+        }
         else if (Hreq.body.expected_size > 0)
         {
-            std::cout << "BUFFER = " << read_buffer << std::endl;
-                size_t p = read_buffer.find("\r\n\r\n");
-
-            std::string body = read_buffer.substr(p + 4, read_buffer.size() - 1);
             // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.body._body.size());
             // Hreq.body.append(Hreq.body._body.substr(0, to_read));
             // Hreq.body._body.erase(0, to_read);
@@ -418,31 +269,22 @@ size_t Client::read_from_fd(int client_fd)
             // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.buffer.size());
             // Hreq.buffer.append(Hreq.buffer.substr(0, to_read));
             // Hreq.buffer.erase(0, to_read);
-            
-            std::cout << "BODY = " << Hreq.body._body << std::endl;
-            std::cout << "Content_Type = " <<  Hreq.content_type << std::endl;
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
-                std::cout << "app/json" << std::endl;
                 std::string file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
                 std::ofstream outfile(file_path.c_str());
                 if (outfile.is_open()) 
                 {
                     outfile << Hreq.body._body;
                     outfile.close();
-                    // return true;
                 }
-                Hreq.body.chunk_done = true;
-                request_received = true;
             }
             else if (Hreq.content_type.find("application/x-www-form-urlencoded") == 0)
             {
-                std::cout << "urlencoded" << std::endl;
-
-                // size_t p = read_buffer.find("\r\n\r\n");
-                // if (p != std::string::npos)
-                    // Hreq.body._body += read_buffer.substr(p + 4);
-                std::cout << "urlencoded1" << std::endl;
+                // std::cout << "urlencoded" << std::endl;
+                size_t p = read_buffer.find("\r\n\r\n");
+                if (p != std::string::npos)
+                    Hreq.body._body += read_buffer.substr(p + 4);
 
                 std::string body_line;
                 std::getline(dd, Hreq.body._body);
@@ -452,36 +294,20 @@ size_t Client::read_from_fd(int client_fd)
 
                 while (std::getline(pair_stream, pair, '&'))
                 {
-                    std::cout << "urlencoded3" << std::endl;
-                    std::cout << "cout = " <<  pair << std::endl;
                     size_t equal_pos = pair.find('=');
                     if (equal_pos != std::string::npos)
                     {
-                        std::cout << "urlencoded4" << std::endl;
                         std::string key = pair.substr(0, equal_pos);
                         std::string value = pair.substr(equal_pos + 1);
-                        std::cout << "key = " << key << std::endl;
-                        std::cout << "value = " << value << std::endl;
-
                         Hreq.body_map.insert(std::make_pair(key, value));
                     }
                 }
-                // std::map<std::string, std::string>::iterator ittt = Hreq.body_map.begin();
-
-                // for(;ittt  != Hreq.body_map.end(); ittt++)
-                // {
-                //     std::cout << *ittt
-                // }
-                // if (Hreq.body_map )
-                Hreq.body.chunk_done = true;
-                request_received = true;
             }
             else if (Hreq.content_type.find("multipart/form-data") == 0)
             {
                 // std::cout << "| " << Hreq.body._body << " |" << std::endl;
                 
-                // std::cout << "THE BODY IS = " <<  Hreq.body._body << std::endl;
-                // Hreq.body._body = 
+                // Hreq.body._body =
                 // "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
                 // "Content-Disposition: form-data; name=\"firstName\"\r\n"
                 // "\r\n"
@@ -493,17 +319,27 @@ size_t Client::read_from_fd(int client_fd)
                 // "Hello, this is the content of the file.\r\n"
                 // "------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
 
-                // std::cout << "content type = " << Hreq.content_type << std::endl;
                 size_t pos = Hreq.content_type.find("boundary=");
                 if (pos == std::string::npos) 
                 {
                     return -1;
                 }
                 boundary = "--" + Hreq.content_type.substr(pos + 9);
-                // std::cout << "boundary = " <<  boundary << std::endl;
                 // boundary = "--" + Hreq.content_type.substr(Hreq.content_type.find("=") + 1,  Hreq.content_type.back()) + "\r\n";
                 std::vector<std::string> body_vector = spliting(Hreq.body._body, boundary);
-                std::cout << "multipart" << std::endl;
+                // std::cout << "content-type = " << Hreq.content_type << std::endl;
+                // std::string boundary = "--" + Hreq.content_type.substr(Hreq.content_type.find("=") + 1,  Hreq.content_type.back()) + "\r\n";
+                // std::string boundary = Hreq.content_type.substr(Hreq.content_type.find("=") + 1);
+                // size_t pos = Hreq.content_type.find("boundary=");
+                // if (pos != std::string::npos) 
+                // {
+                //     boundary = "--" + Hreq.content_type.substr(pos + 9);
+                //     std::cout << "boundary = " << boundary << std::endl;
+                //     // std::vector<std::string> body_vector = spliting(Hreq.buffer, boundary);
+                // }
+                // std::string boundary = "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
+                // std::cout << "body = " << Hreq.buffer << std::endl;
+
 
                 std::string filename;
                 std::string name;
@@ -525,7 +361,6 @@ size_t Client::read_from_fd(int client_fd)
                             if (end_quote != std::string::npos)
                             {
                                 filename = part.substr(name_pos, end_quote - name_pos);
-                                std::cout << "filename = " << filename << std::endl;
                             }
                             //find /r/n/r/n 
                             size_t pos = part.find("\r\n\r\n");
@@ -533,11 +368,9 @@ size_t Client::read_from_fd(int client_fd)
                             {
                                 size_t end = part.find("\r\n");
                                 part =  part.substr(pos + 4, end - 1);
-                                std::cout << "Part = " << part;
                             }
                             std::string file_path = "/tmp/" + filename;
                             std::ofstream outfile(file_path.c_str());
-                            std::cout << "part = " << part << std::endl;
                             if (outfile.is_open()) 
                             {
                                 outfile << part;
@@ -554,7 +387,6 @@ size_t Client::read_from_fd(int client_fd)
                                 if (end_quote != std::string::npos)
                                 {
                                     name = part.substr(name_pos, end_quote - name_pos);
-                                    std::cout << "name = " << name << std::endl;
                                 }
                             }
                             //
@@ -570,7 +402,6 @@ size_t Client::read_from_fd(int client_fd)
                                     outfile << content;
                                     outfile.close();
                                 }
-                                std::cout << "content = " << content;
                             }
                             // store the content in map
                             // std::map<std::string,std::string> multipart_body;
@@ -586,76 +417,183 @@ size_t Client::read_from_fd(int client_fd)
                     //     std::cout << "Part = " << part;
                     // }
                     ///-------------
-                        std::cout << "body vector = " << *it << std::endl;
                     }
                 // std::stringstream pair_stream(body_line);
+            
+            }
+            if (Hreq.body.data.size() == Hreq.body.expected_size) 
+            {
                 Hreq.body.chunk_done = true;
                 request_received = true;
             }
         }
     }
-    
-    if (Hreq.method == "GET")
-    {
-        // Hreq.body._body = body;
-        // request line 
-        // hreq.map_headers headers
-        // 
-        // obelhami hna ghaysayb GET DELETE 
-    }
     return !request_received;
 }
 
 
-bool Client::write_to_fd(int fd)
-{
-    std::cout << ">> Attempting to write to fd\n";
+void Client::test_chunked_parsing() {
+    std::cout << "=== Testing Chunked Transfer Encoding Parser ===\n\n";
 
-    if (!response_ready || response_buffer.empty()) 
-    {
-        std::cout << ">> Not ready to write yet\n";
-        return true; // Nothing to write yet
+    std::vector<std::vector<std::string>> test_cases = {
+        {"5\r\nhello\r\n0\r\n\r\n"},
+        {"5\r\nhe", "llo\r\n0", "\r\n\r\n"},
+        {"5\r\nhello\r\n", "6\r\n world\r\n", "0\r\n\r\n"},
+        {"5\r\nhello\r\n", "0\r\n", "X-Test: value\r\n\r\n"}
+    };
+
+    for (size_t i = 0; i < test_cases.size(); i++) {
+        std::cout << "--- Test Case " << i+1 << " ---\n";
+        Client client;
+        
+        client.Hreq.header.parsed = true;
+        client.Hreq.header.map_header["Transfer-Encoding"] = "chunked";
+        client.Hreq.body.chunked = true;
+        
+        bool need_more_data = true;
+        
+        for (size_t chunk_num = 0; chunk_num < test_cases[i].size(); chunk_num++) {
+            const std::string& chunk = test_cases[i][chunk_num];
+            std::cout << "Feeding chunk " << chunk_num+1 << ": [" << chunk << "]\n";
+            
+            // Append to body buffer directly for testing
+            client.Hreq.body._body += chunk;
+            
+            need_more_data = client.handle_chunked_body(0);
+            
+            std::cout << "  Current body: \"" << client.Hreq.body.data << "\"\n";
+            std::cout << "  Remaining buffer: \"" << client.Hreq.body._body << "\"\n";
+            std::cout << "  Need more: " << (need_more_data ? "true" : "false") << "\n";
+            std::cout << "  Parse state: " 
+                      << (client.Hreq.body.reading_chunk_size ? "reading_size" : "reading_data") 
+                      << ", current_chunk_size=" << client.Hreq.body.current_chunk_size << "\n";
+            
+            if (!need_more_data && chunk_num != test_cases[i].size() - 1) {
+                std::cout << "ERROR: Parser completed too early!\n";
+                break;
+            }
+        }
+        
+        if (!need_more_data && client.Hreq.body.is_done) {
+            std::cout << "SUCCESS: Properly parsed complete chunked message\n";
+            std::cout << "Final body: \"" << client.Hreq.body.data << "\"\n";
+        } else if (need_more_data) {
+            std::cout << "ERROR: Parser didn't detect complete message\n";
+        } else {
+            std::cout << "ERROR: Parser completed but didn't set is_done\n";
+        }
+        
+        std::cout << "\n";
     }
-
-    ssize_t sent = send(fd, response_buffer.c_str(), response_buffer.length(), 0);
-    std::cout << ">> Sent bytes: " << sent << "\n";
-
-    if (sent <= 0)
-    {
-        std::cerr << ">> Failed to send response or client closed connection\n";
-        return false;
-    }
-
-    if (static_cast<size_t>(sent) == response_buffer.length()) {
-        std::cout << ">> Response sent completely\n";
-        response_buffer.clear();
-        response_ready = false;
-        return true;
-    }
-
-    response_buffer = response_buffer.substr(sent);
-    std::cout << ">> Partial send. Remaining: " << response_buffer.length() << "\n";
-    return false;
 }
 
+void cleanup_connection(Server& sock, int fd) {
+    close(fd);
+    delete sock.sock_map[fd];
+    sock.sock_map.erase(fd);
+    epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+}
 
+int main() 
+{
+    Server sock(AF_INET, SOCK_STREAM, 0);
+    while(1) 
+    {
+        size_t i = epoll_wait(sock.epoll_fd, sock.events, 1024, -1);
+        
+        for (int j = 0; j < i; j++) 
+        {
+            if (sock.events[j].data.fd == sock.server_fd) 
+            {
+                // Handle new connection
+                sock.client_fd = accept(sock.server_fd, 
+                                      (struct sockaddr*)&sock.address, 
+                                      &sock.addrlen);
+                if (sock.client_fd == -1) 
+                {
+                    continue; 
+                }
+                
+                // Set socket to non-blocking
+                int flags = fcntl(sock.client_fd, F_GETFL, 0);
+                fcntl(sock.client_fd, F_SETFL, flags | O_NONBLOCK);
+                
+                Client *A = new Client();
+                sock.sock_map[sock.client_fd] = A;
+                
+                sock.client_events.events = EPOLLIN | EPOLLET;  // Edge-triggered
+                sock.client_events.data.fd = sock.client_fd;
+                epoll_ctl(sock.epoll_fd, EPOLL_CTL_ADD, sock.client_fd, &sock.client_events);
+            }
+            else 
+            {
+                int fd = sock.events[j].data.fd;
+                Client* A = sock.sock_map[fd];
+                
+                if (sock.events[j].events & EPOLLIN) 
+                {
+                    bool connection_ok = true;
+                    
+                    // For edge-triggered, we must read until EAGAIN/EWOULDBLOCK
+                    while (connection_ok) 
+                    {
+                        bool more_data_expected = A->read_from_fd(fd);
+                        
+                        if (A->Hreq.body.is_done) 
+                        {
+                            // Request fully received, prepare response
+                            A->read_from_fd(sock.client_fd);
+                            // Modify to watch for EPOLLOUT
+                            sock.client_events.events = EPOLLOUT | EPOLLET;
+                            epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &sock.client_events);
+                            break;
+                        }
+                        
+                        if (!more_data_expected) 
+                        {
+                            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                                break;  // No more data available right now
+                            } else {
+                                // Real error occurred
+                                connection_ok = false;
+                            }
+                        }
+                    }
+                    
+                    if (!connection_ok) {
+                        cleanup_connection(sock, fd);
+                    }
+                }
+                if (sock.events[j].events & EPOLLOUT) 
+                {
+                    // Handle response writing
+                    bool write_complete = A->write_to_fd(fd);
+                    
+                    if (write_complete) 
+                    {
+                        if (A->Hreq.header.map_header["Connection"] == "close") 
+                        {
+                            cleanup_connection(sock, fd);
+                        } 
+                        else 
+                        {
+                            // Keep alive - switch back to reading
+                            A->reset_for_next_request();  // Implement this in Client
+                            sock.client_events.events = EPOLLIN | EPOLLET;
+                            epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &sock.client_events);
+                        }
+                    } else if (errno != EAGAIN && errno != EWOULDBLOCK) 
+                    {
+                        cleanup_connection(sock, fd);
+                    }
+                }
+                if (sock.events[j].events & (EPOLLERR | EPOLLHUP)) 
+                {
+                    cleanup_connection(sock, fd);
+                }
+            }
+        }
+    }
+    return 0;
+}
 
-// bool Client::write_to_fd(int fd)
-// {
-//     const std::string response =
-//         "HTTP/1.1 200 OK\r\n"
-//         "Content-Length: 13\r\n"
-//         "Content-Type: text/plain\r\n"
-//         "\r\n"
-//         "Hello, world!";
-
-//     ssize_t sent = send(fd, response.c_str(), response.length(), 0);
-//     if (sent <= 0)
-//     {
-//         std::cerr << "Failed to send response or client closed connection\n";
-//         return false;
-//     }
-
-//     std::cout << "Response sent. Closing connection.\n";
-//     return false; 
-// }

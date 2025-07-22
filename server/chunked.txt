@@ -1,6 +1,30 @@
-5
-Hello
-6
- World
+POST /upload HTTP/1.1
+
+Host: localhost:8081
+
+User-Agent: custom-test
+
+Transfer-Encoding: chunked
+
+Content-Type: text/plain
+
+
+
+7
+
+Mozilla
+
+9
+
+Developer
+
+7
+
+Network
+
+
 0
+
+
+
 
