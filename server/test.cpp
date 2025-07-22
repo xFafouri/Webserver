@@ -103,43 +103,42 @@ void read_from_fd(int client_fd)
     //application/x-www-form-urlencoded
        
     // MULTIPART
-    read_buffer =
+    // read_buffer =
+    //     "POST /upload HTTP/1.1\r\n"
+    //     "Host: example.com\r\n"
+    //     "User-Agent: curl/7.68.0\r\n"
+    //     "Accept: */*\r\n"
+    //     "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Length: 314\r\n"
+    //     "\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Disposition: form-data; name=\"firstName\"\r\n"
+    //     "\r\n"
+    //     "Brian\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+    //     "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+    //     "Content-Type: text/plain\r\n"
+    //     "\r\n"
+    //     "Hello, this is the content of the file.\r\n"
+    //     "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
+        
+        // TRANSFER ENCODING : CHUNCKED 
+        read_buffer =
         "POST /upload HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "User-Agent: curl/7.68.0\r\n"
         "Accept: */*\r\n"
-        "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Length: 314\r\n"
-        "\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Disposition: form-data; name=\"firstName\"\r\n"
-        "\r\n"
-        "Brian\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
-        "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+        "Transfer-Encoding: chunked\r\n"
         "Content-Type: text/plain\r\n"
         "\r\n"
-        "Hello, this is the content of the file.\r\n"
-        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n";
-        
-        // TRANSFER ENCODING : CHUNCKED 
-        // read_buffer =
-        // "POST /upload HTTP/1.1\r\n"
-        // "Host: example.com\r\n"
-        // "User-Agent: curl/7.68.0\r\n"
-        // "Accept: */*\r\n"
-        // "Transfer-Encoding: chunked\r\n"
-        // "Content-Type: text/plain\r\n"
-        // "\r\n"
-        // "7\r\n"
-        // "Mozilla\r\n"
-        // "9\r\n"
-        // "Developer\r\n"
-        // "0\r\n"
-        // "Network\r\n"
-        // "0\r\n"
-        // "\r\n";
+        "5\r\n"
+        "Hello\r\n"
+        "6\r\n"
+        " World\r\n"
+        "0\r\n"
+        "\r\n";
 
+        
         // **multipart/form-data**
 
     // std::cout << read_buffer  << std::endl;
@@ -151,6 +150,7 @@ void read_from_fd(int client_fd)
     size_t p = read_buffer.find("\r\n\r\n");
 
     std::string body = read_buffer.substr(p + 4, read_buffer.size() - 1);
+    std::cout <<  "BODY = " << body << std::endl;
 
     // std::map<std::string,std::string>::iterator s;
     std::istringstream ss(headers);
@@ -240,9 +240,8 @@ void read_from_fd(int client_fd)
                     {
                         std::cout << e.what() << std::endl;
                     }
-
+                    std::cout << "body = "  <<  body << std::endl;
                     chunks.push_back(std::make_pair(chunk_size, chunk_data));
-
                     pos += chunk_size + 2;
                 }
                 

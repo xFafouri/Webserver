@@ -31,37 +31,37 @@ class Header
         bool parsed = false;
 };
 
-// class Body 
-// {
-//     public:
-//         std::string data;
-//         size_t expected_size = 0;
-//         bool complete = false;
-//         bool chunked = false;
-//         size_t chunk_pos = 0;
-
-//         void append(const std::string& new_data) 
-//         {
-//             data += new_data;
-//         }
-// };
 
 class Body {
     public:
+        std::string raw_body;
         std::string data;
         std::string _body;
         size_t expected_size = 0;
-        bool complete = false;
         bool chunked = false;
 
+        bool chunk_done = false;
+        bool is_done = false;
+        size_t current_chunk_size;
+        bool reading_chunk_size = true;
         void append(const std::string& new_data) 
         {
             data += new_data;
         }
-        bool needs_more_data() const 
+        void reset() 
         {
-            return !complete && (!chunked && data.size() < expected_size);
+            data.clear();
+            raw_body.clear();
+            expected_size = 0;
+            chunked = false;
+            is_done = false;
+            current_chunk_size = 0;
+            reading_chunk_size = true;
         }
+        // bool needs_more_data() const 
+        // {
+        //     return !complete && (!chunked && data.size() < expected_size);
+        // }
 
 };
 
@@ -103,22 +103,38 @@ class Client
         bool request_received = false;;
         bool response_sent;
         std::string file_path;
-        bool read_from_fd(int client_fd);
+        size_t read_from_fd(int client_fd);
         bool write_to_fd(int client_fd);
         std::string trim(std::string str);
         std::vector<std::string> split( std::string& s, std::string& delimiter);
         bool check_methods();
-
+        void test_chunked_parsing();
+        void handle_chunked_body();
+        void reset_for_next_request();
         // ~Client();
+        std::string response_buffer;
+        bool response_ready;       
+        
+        // 
+        
+        void prepare_response() {
+            response_buffer =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Length: 13\r\n"
+                "Connection: keep-alive\r\n"  // <-- This is critical
+                "\r\n"
+                "Hello, world!";
+            response_ready = true;
+        }
 
 };
 
 
-class Server {
+class Server 
+{
     private:
-    int type;
-    int protocol;
-    
+        int type;
+        int protocol;
     public:
         std::map<int, Client *> sock_map;
         struct sockaddr_in address;
