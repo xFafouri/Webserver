@@ -5,9 +5,24 @@
 Server::Server()
 {
     host = "";
-    listen = 80;
+    listen = -1;
     client_max_body_size = 0;
 }
+
+void Server::validate() {
+    if (this->listen == -1)
+        throw std::runtime_error("Missing 'listen' directive");
+    if (this->host.empty())
+        throw std::runtime_error("Missing 'host' directive");
+    if (this->locations.empty())
+        throw std::runtime_error("At least one location block required");
+
+    for (size_t i = 0; i < locations.size(); i++) {
+        if (locations[i].root.empty())
+            throw std::runtime_error("Location block missing 'root' directive");
+    }
+}
+
 
 static bool    check_is_digit(std::string string)
 {
@@ -89,30 +104,40 @@ void Server::printf_server()
 
 bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
 {
+    bool listen_seen = false;
+    bool host_seen = false;
     for(;index < tokens.size(); index++)
     {
         // std::cout << tokens[index] << std::endl;
         if (tokens[index] == "listen")
         {
-            if (check_is_digit(tokens[index + 1]) == true && tokens[index + 2] == ";")
-            {
-                listen = ft_atoi(tokens[index + 1].c_str());
-            }
+            if (tokens[index + 2] != ";")
+                throw std::runtime_error("Missing ';' at the end of client max body size directive");
+            if (listen_seen)
+                    throw std::runtime_error("Duplicate 'listen' directive found.");
             else
-                throw std::runtime_error("Error for parsing1");
+            {
+                if (check_is_digit(tokens[index + 1]) == true && tokens[index + 2] == ";")
+                        listen = ft_atoi(tokens[index + 1].c_str());
+                else
+                    throw std::runtime_error("Error for parsing1");
+                listen_seen = true;
+            }
             index += 2;
 
         }
         else if (tokens[index] == "host")
         {
-            if (tokens[index + 2] == ";")
-            {
-                // std::cout << "host ===> " << host << std::endl;
-                host = tokens[index + 1];
-                index += 2;
-            }
+            if (tokens[index + 2] != ";")
+                throw std::runtime_error("Missing ';' at the end of host directive");
+            if (host_seen)
+                    throw std::runtime_error("Duplicate 'host' directive found.");
             else
-                throw std::runtime_error("error for parsing2");
+            {
+                host = tokens[index + 1];
+                host_seen = true;
+            }
+            index += 2;
         }
         else if (tokens[index] == "server_name")
         {
@@ -176,15 +201,22 @@ bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
         {
             Location location;
             index++;
+            if (tokens[index] == "{")
+                throw std::runtime_error("Invalid or missing path after 'location'.");
             if (tokens[index + 1] != "{")
                 throw std::runtime_error("error for parsing your location must has a '{' ");
             if (location.parser_location(index, tokens) == true)
                 locations.push_back(location);
+            else
+                throw std::runtime_error("Expected '}' at the end of location block");
         }
         else if (tokens[index] == "}" && (tokens[index + 1] == "server" || index + 1 == tokens.size()))
+        {
+            validate();
             return true;
+        }
         else
-            throw std::runtime_error("Error for parsing4");
+            throw std::runtime_error("Error: Unknown directive in server block.");
     }
     return false;
 }

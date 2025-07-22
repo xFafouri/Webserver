@@ -72,11 +72,13 @@ void Location::print_location()
 
 bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
 {
-    // path = tokens[index];
+    path = tokens[index];
+    if (path == "{" || path == "}" || path == ";" || path.empty() || path[0] != '/')
+        throw std::runtime_error("Invalid location path: '" + path + "'. Location path must start with '/'.");
     index += 2;
     for(;index < tokens.size(); index++)
     {
-        std::cout << tokens[index] << std::endl;
+        // std::cout << tokens[index] << std::endl;
         if (tokens[index] == "root")
         {
             if (tokens[index + 2] != ";")
@@ -95,8 +97,9 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
                 }
                 else if (
                     tokens[index] == "root"  || tokens[index] == "autoindex" ||
-                    tokens[index] == "allowed_methods" || tokens[index] == "path" || 
-                    tokens[index] == "index" || tokens[index] == "upload_store")
+                    tokens[index] == "cgi_flag" || tokens[index] == "path" || 
+                    tokens[index] == "index" || tokens[index] == "upload_store" ||  tokens[index] == "cgi_pass" ||
+                     tokens[index] == "return" || tokens[index] == "allowed_methods")
                 {
                     throw std::runtime_error("Missing ';' after index_file directive");
                 }
@@ -124,7 +127,7 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
         else if (tokens[index] == "upload_store")
         {
             if (tokens[index + 2] != ";")
-                throw std::runtime_error("error for parsing for autoindex");
+                throw std::runtime_error("Missing ';' at the end of upload store directive");
             else
                 upload_store = tokens[index + 1];
             index += 2;
@@ -134,9 +137,6 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
             index++;
             std::map<std::string, bool> methods;
             fill_methods(methods);
-            // std::cout << methods["GET"] << std::endl;
-            // std::cout << methods["POST"] << std::endl;
-            // std::cout << methods["DELETE"] << std::endl;
             int checker = 0;
             while (index < tokens.size())
             {
@@ -175,10 +175,20 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
                         checker++;
                     }
                 }
+                else if (
+                    tokens[index] == "root"  || tokens[index] == "autoindex" ||
+                    tokens[index] == "cgi_flag" || tokens[index] == "path" || 
+                    tokens[index] == "index" || tokens[index] == "upload_store" ||  tokens[index] == "cgi_pass" ||
+                     tokens[index] == "return")
+                {
+                    throw std::runtime_error("Missing ';' at the end of Methods directive");
+
+                }
+                else
+                    throw std::runtime_error("Invalid method '" + tokens[index] + "' in 'allowed_methods'");
                 index++;
             }
-            if (tokens[index] != ";")
-                throw std::runtime_error("Missing ';' at the end of Methods directive");
+            // std::cout << tokens[index] << std::endl;
         }
         else if (tokens[index] == "return")
         {
@@ -215,7 +225,7 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
             return true;
         }
         else
-            throw std::runtime_error("Error for parsing7");
+            throw std::runtime_error("Error: Unknown directive in location block.");
     }
-    return true; 
+    return false; 
 }
