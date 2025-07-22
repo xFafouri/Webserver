@@ -1,7 +1,7 @@
 #include "parser.hpp"
 #include <stdexcept>
 
-void    Parser::parsing(char *fileName)
+void    Parser::parsing(std::string fileName)
 {
     std::ifstream file(fileName);
     if (file.is_open())
@@ -66,8 +66,7 @@ void    Parser::parse()
             i++;
             if (tokens[i] != "{")
             {
-                std::cerr << "Expected '{' after 'server'\n";
-                return;
+                throw std::runtime_error("Expected '{' after 'server'");
             }
             i++;
                 Server server;
@@ -75,10 +74,14 @@ void    Parser::parse()
             {
                 servers.push_back(server);
             }
+            else 
+                throw std::runtime_error("Expected '}' at the end of the server block");
         }
+        else
+            throw std::runtime_error("Error : for block of servers");
         i++;
     }
-    servers[0].printf_server();
+    // servers[0].printf_server();
     // std::cout << "======= here =========\n";
     // servers[1].printf_server();
     // std::cout << "======= here =========\n";

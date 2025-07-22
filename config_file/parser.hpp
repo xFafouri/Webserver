@@ -19,7 +19,7 @@ class Parser
         std::vector<std::string> tokens;
     public:
         std::vector<Server> servers;
-        void    parsing(char *fileName);
+        void    parsing(std::string fileName);
         void    parse();
 };
 

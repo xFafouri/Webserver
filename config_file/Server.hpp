@@ -12,7 +12,7 @@ class locations;
 class Server
 {
     public:
-    int listen;
+    long long listen;
     std::string host;
     std::vector<std::string> server_names;
     std::map<int, std::string> error_pages;
@@ -22,4 +22,5 @@ class Server
     Server();
     bool parsServer(std::vector<std::string> &tokens, size_t &index);
     void printf_server();
+    void validate();
 };
