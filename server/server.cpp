@@ -93,44 +93,41 @@ bool Client::check_methods()
 
 void Client::reset_for_next_request() 
 {
-    // Reset request parsing state
     Hreq.header.parsed = false;
     Hreq.header.method.clear();
     Hreq.header.uri.clear();
     Hreq.header.http_v.clear();
     Hreq.header.map_header.clear();
     Hreq.header.content_type.clear();
+    request_received = false;
 
-    // Reset body handling
+
     Hreq.body.raw_body.clear();
     Hreq.body.data.clear();
     Hreq.body._body.clear();
+    // Hreq.body._body.clear();
     Hreq.body.expected_size = 0;
     Hreq.body.chunked = false;
     Hreq.body.chunk_done = false;
     Hreq.body.is_done = false;
     Hreq.body.current_chunk_size = 0;
     Hreq.body.reading_chunk_size = true;
-
     read_buffer.clear();
     Hreq.buffer.clear();
-
     write_buffer.clear();
     response_sent = false;
-
     file_path.clear();
-
     Hreq.body_map.clear();
-
-    request_received = false;
+    // request_received = false;
 }
-void Client::handle_chunked_body() {
+void Client::handle_chunked_body() 
+{
     while (true) {
-        // Step 1: Read chunk size if needed
-        if (Hreq.body.reading_chunk_size) {
+        if (Hreq.body.reading_chunk_size) 
+        {
             size_t line_end = Hreq.body._body.find("\r\n");
-            if (line_end == std::string::npos) {
-                // Not enough data yet to read chunk size
+            if (line_end == std::string::npos) 
+            {
                 return;
             }
 
@@ -139,8 +136,8 @@ void Client::handle_chunked_body() {
 
             Hreq.body.current_chunk_size = std::strtol(size_str.c_str(), nullptr, 16);
 
-            // End of chunks
-            if (Hreq.body.current_chunk_size == 0) {
+            if (Hreq.body.current_chunk_size == 0) 
+            {
                 Hreq.body.is_done = true;
                 return;
             }
@@ -148,68 +145,18 @@ void Client::handle_chunked_body() {
             Hreq.body.reading_chunk_size = false;
         }
 
-        // Step 2: Read chunk data + trailing \r\n
-        if (Hreq.body._body.size() < Hreq.body.current_chunk_size + 2) {
-            // Not enough data yet for full chunk
+        if (Hreq.body._body.size() < Hreq.body.current_chunk_size + 2) 
+        {
             return;
         }
 
-        // Extract chunk data
         Hreq.body.data += Hreq.body._body.substr(0, Hreq.body.current_chunk_size);
-        Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2); // +2 for \r\n
-        Hreq.body.reading_chunk_size = true; // Next iteration will read size again
+        Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2);
+        Hreq.body.reading_chunk_size = true;
     }
 }
 
-// bool Client::handle_chunked_body() 
-// {
-
-//     while (!Hreq.body._body.empty()) {
-//         if (Hreq.body.reading_chunk_size) {
-//             size_t line_end = Hreq.body._body.find("\r\n");
-//             if (line_end == std::string::npos) 
-//             {
-//                 return true;
-//             }
-
-//             std::string size_str = Hreq.body._body.substr(0, line_end);
-//             Hreq.body.current_chunk_size = strtoul(size_str.c_str(), nullptr, 16);
-//             Hreq.body._body.erase(0, line_end + 2);
-//             Hreq.body.reading_chunk_size = false;
-
-//             if (Hreq.body.current_chunk_size == 0) 
-//             {
-//                 if (Hreq.body._body.size() >= 2) {
-//                     if (Hreq.body._body.substr(0, 2) == "\r\n") 
-//                     {
-//                         Hreq.body._body.erase(0, 2);
-//                     } 
-//                     else 
-//                     {
-//                         size_t trailers_end = Hreq.body._body.find("\r\n\r\n");
-//                         if (trailers_end != std::string::npos) {
-//                             Hreq.body._body.erase(0, trailers_end + 4);
-//                         } else {
-//                             return true;
-//                         }
-//                     }
-//                 }
-//                 Hreq.body.is_done = true;
-//                 return false; 
-//             }
-//         }
-
-//         if (Hreq.body._body.size() < Hreq.body.current_chunk_size + 2) {
-//             return true;
-//         }
-//         Hreq.body.data.append(Hreq.body._body.substr(0, Hreq.body.current_chunk_size));
-//         Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2);
-//         Hreq.body.reading_chunk_size = true;
-//     }
-//     return true;
-// }
-
-size_t Client::read_from_fd(int client_fd)
+RequestParseStatus Client::read_from_fd(int client_fd)
 {
     char recv_buffer[1024];
 
@@ -217,16 +164,17 @@ size_t Client::read_from_fd(int client_fd)
     std::cout << "read *from fd " << n << std::endl;
     
     if (n == 0) {
-        std::cout << "DEBUG: Client closed connection\n";
-        return 0;
+        std::cout << "Client closed connection" << std::endl;;
+        // return 0;
+        return PARSE_CONNECTION_CLOSED;
     }
     if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::cout << "DEBUG: EAGAIN — try again later\n";
-            return 0;  // Not a fatal error!
-        }
-        std::cout << "DEBUG: Read error: " << strerror(errno) << "\n";
-        return -1;  // Only real errors
+    // if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    //         std::cout << "DEBUG: EAGAIN — try again later\n";
+    //         return 0;
+    //     }
+        std::cout << "****read error: " << "\n";
+       return PARSE_INTERNAL_ERROR; // Only real errors
     }
 
     //  read_buffer += std::string(recv_buffer, n);
@@ -274,18 +222,21 @@ size_t Client::read_from_fd(int client_fd)
         size_t header_end = read_buffer.find("\r\n\r\n");
         if (header_end == std::string::npos) 
         {
-            return true; // Need more data 
+            return PARSE_INCOMPLETE; // Need more data 
         }
         //  Parse the request line
         size_t pos = read_buffer.find("\r\n");
         if (pos == std::string::npos)
-            return -1; //bad request
+            return PARSE_BAD_REQUEST;; //bad request
         std::cout << "TEST3" << std::endl;
         std::string request_line = read_buffer.substr(0, pos);
         std::istringstream iss(request_line);
         iss >> Hreq.method >> Hreq.uri >> Hreq.http_v;
-        
-        
+
+        if (Hreq.uri.length() > 4096)
+        {
+            return REQUEST_URI_TOO_LONG;
+        }
         //parse headers 
         std::string headers = read_buffer.substr(pos + 2, read_buffer.find("\r\n\r\n") - (pos + 2));
         std::string header_line;
@@ -306,7 +257,7 @@ size_t Client::read_from_fd(int client_fd)
         {
             std::cout << "Error Method" << std::endl;
             std::cout << "2*" << std::endl;
-            return -1;
+            return PARSE_NOT_IMPLEMENTED;
         }
         Hreq.header.parsed = true;
 
@@ -334,7 +285,7 @@ size_t Client::read_from_fd(int client_fd)
         if (!Hreq.body.chunked && Hreq.body.expected_size == 0)
         {
             request_received = true;
-            return 0;
+            return PARSE_OK;
         }
         Hreq.body._body = read_buffer.substr(header_end + 4);
         // read_buffer.clear(); // ghda ngul lik fin <3
@@ -356,8 +307,9 @@ size_t Client::read_from_fd(int client_fd)
                 out.close();
                 Hreq.body.reset();
                 request_received = true;
+                return PARSE_OK;
             }
-            return !Hreq.body.is_done;
+            return PARSE_INCOMPLETE;
         }
         // if (Hreq.body.chunked) 
         // {
@@ -408,7 +360,7 @@ size_t Client::read_from_fd(int client_fd)
         else if (Hreq.body.expected_size > 0)
         {
             std::cout << "BUFFER = " << read_buffer << std::endl;
-                size_t p = read_buffer.find("\r\n\r\n");
+            size_t p = read_buffer.find("\r\n\r\n");
 
             std::string body = read_buffer.substr(p + 4, read_buffer.size() - 1);
             // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.body._body.size());
@@ -497,7 +449,7 @@ size_t Client::read_from_fd(int client_fd)
                 size_t pos = Hreq.content_type.find("boundary=");
                 if (pos == std::string::npos) 
                 {
-                    return -1;
+                    return PARSE_BAD_REQUEST;
                 }
                 boundary = "--" + Hreq.content_type.substr(pos + 9);
                 // std::cout << "boundary = " <<  boundary << std::endl;
@@ -600,10 +552,12 @@ size_t Client::read_from_fd(int client_fd)
         // Hreq.body._body = body;
         // request line 
         // hreq.map_headers headers
-        // 
         // obelhami hna ghaysayb GET DELETE 
     }
-    return !request_received;
+    if (request_received)
+        return PARSE_OK; 
+    else
+        return PARSE_INCOMPLETE;
 }
 
 

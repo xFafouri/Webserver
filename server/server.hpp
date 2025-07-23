@@ -32,6 +32,20 @@ class Header
 };
 
 
+enum RequestParseStatus 
+{
+    PARSE_INCOMPLETE = 1000, // Still receiving data
+    PARSE_OK = 200,        // Full and valid request
+    PARSE_BAD_REQUEST = 400, // Syntax or structure error
+    PARSE_NOT_IMPLEMENTED = 501, // Unsupported method
+    REQUEST_METHOD_NOT_ALLOWED = 405, // Method Not Allowed
+    PARSE_INTERNAL_ERROR = 500,  // Logic/internal crash
+    PARSE_CONNECTION_CLOSED = 0,  // Client closed
+    REQUEST_URI_TOO_LONG = 414,    // URI Too Long
+    // REQUEST_NOT_FOUND = 404,       // Not Found
+};
+
+
 class Body {
     public:
         std::string raw_body;
@@ -103,7 +117,7 @@ class Client
         bool request_received = false;;
         bool response_sent;
         std::string file_path;
-        size_t read_from_fd(int client_fd);
+        RequestParseStatus read_from_fd(int client_fd);
         bool write_to_fd(int client_fd);
         std::string trim(std::string str);
         std::vector<std::string> split( std::string& s, std::string& delimiter);
@@ -113,15 +127,14 @@ class Client
         void reset_for_next_request();
         // ~Client();
         std::string response_buffer;
-        bool response_ready;       
-        
-        // 
+        bool response_ready;
+        size_t status_code;       
         
         void prepare_response() {
             response_buffer =
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Length: 13\r\n"
-                "Connection: keep-alive\r\n"  // <-- This is critical
+                "Connection: keep-alive\r\n"
                 "\r\n"
                 "Hello, world!";
             response_ready = true;
