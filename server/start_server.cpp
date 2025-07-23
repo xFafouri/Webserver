@@ -37,7 +37,7 @@ void cleanup_connection(Server& sock, int fd, bool remove_file = false)
     epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 }
 
-int main()
+void start_server()
 {
     Server sock(AF_INET, SOCK_STREAM, 0);
     while (1)
@@ -95,26 +95,26 @@ int main()
                 while (true)
                 {
                 //    ssize_t bytes_read = A->read_from_fd(fd);
-                    RequestParseStatus status = A->read_from_fd(fd);
-                    std::cout << "STATUS = "<<  status << std::endl; 
-                    if (status == PARSE_OK)
+                    A->status = A->read_from_fd(fd); // request 
+                    std::cout << "STATUS = "<<  A->status << std::endl; 
+                    if (A->status == PARSE_OK)
                     {
                         request_complete = true;
                         break;
                     }
-                    else if (status == PARSE_INCOMPLETE)
+                    else if (A->status == PARSE_INCOMPLETE)
                     {
                         break;
                     }
-                    else if (status == PARSE_CONNECTION_CLOSED)
+                    else if (A->status == PARSE_CONNECTION_CLOSED)
                     {
                         std::cout << "****read_from_fd connection closed\n";
                         connection_ok = false;
                         break;
                     }
-                    else if (status >= 400 && status < 600)
+                    else if (A->status >= 400 && A->status < 600)
                     {
-                        A->status_code = status;
+                        A->status_code = A->status;
                         request_complete = true;
                         break;
                     }
@@ -171,7 +171,7 @@ int main()
                 while (!write_complete)
                 {
                     // std::cout << status << std::endl;
-                    write_complete = A->write_to_fd(fd);
+                    write_complete = A->write_to_fd(fd); // response 
                     
                     if (!write_complete) 
                     {
@@ -212,5 +212,4 @@ int main()
             }
         }
     }
-    return 0;
 }

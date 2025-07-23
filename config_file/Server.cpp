@@ -2,14 +2,14 @@
 #include "Location.hpp"
 #include <stdexcept>
 
-Server::Server()
+ServerCo::ServerCo()
 {
     host = "";
     listen = -1;
     client_max_body_size = 0;
 }
 
-void Server::validate() {
+void ServerCo::validate() {
     if (this->listen == -1)
         throw std::runtime_error("Missing 'listen' directive");
     if (this->host.empty())
@@ -80,7 +80,7 @@ static long long ft_atoi(const char *str)
 	return (factorial * sign);
 }
 
-void Server::printf_server()
+void ServerCo::printf_server()
 {
     // std::cout << "here\n";
     std::cout << "listen is --> " << listen <<std::endl;
@@ -102,7 +102,7 @@ void Server::printf_server()
     }
 }
 
-bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
+bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
 {
     bool listen_seen = false;
     bool host_seen = false;
