@@ -42,6 +42,10 @@ Client::Client()
 {
     request_received = false;
     response_sent = false;
+
+    isGET = false;
+    isPOST = false;
+    isDELETE = false;
 }
 
 std::string Client::trim(std::string str)
@@ -154,6 +158,16 @@ void Client::handle_chunked_body()
         Hreq.body._body.erase(0, Hreq.body.current_chunk_size + 2);
         Hreq.body.reading_chunk_size = true;
     }
+}
+
+void Client::getMethod()
+{
+
+}
+
+void Client::deleteMethod()
+{
+
 }
 
 RequestParseStatus Client::read_from_fd(int client_fd)
@@ -549,10 +563,12 @@ RequestParseStatus Client::read_from_fd(int client_fd)
     
     if (Hreq.method == "GET")
     {
-        // Hreq.body._body = body;
-        // request line 
-        // hreq.map_headers headers
-        // obelhami hna ghaysayb GET DELETE 
+        isGET = true;
+        getMethod();
+        // Hreq.uri;
+        // Hreq.http_v;
+        // Hreq.method;
+        // status 
     }
     if (request_received)
         return PARSE_OK; 

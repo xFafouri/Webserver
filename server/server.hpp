@@ -20,6 +20,9 @@
 #include <string>
 #include <sys/types.h>
 
+#include "../config_file/parser.hpp"
+
+
 class Header
 {
     public :
@@ -32,7 +35,7 @@ class Header
 };
 
 
-enum RequestParseStatus 
+enum RequestParseStatus
 {
     PARSE_INCOMPLETE = 1000, // Still receiving data
     PARSE_OK = 200,        // Full and valid request
@@ -72,10 +75,6 @@ class Body {
             current_chunk_size = 0;
             reading_chunk_size = true;
         }
-        // bool needs_more_data() const 
-        // {
-        //     return !complete && (!chunked && data.size() < expected_size);
-        // }
 
 };
 
@@ -114,9 +113,10 @@ class Client
         // HandleRes Hres;
         std::string read_buffer;
         std::string write_buffer;
-        bool request_received = false;;
+        bool request_received;
         bool response_sent;
         std::string file_path;
+
         RequestParseStatus read_from_fd(int client_fd);
         bool write_to_fd(int client_fd);
         std::string trim(std::string str);
@@ -129,8 +129,8 @@ class Client
         std::string response_buffer;
         bool response_ready;
         size_t status_code;       
-        
-        void prepare_response() {
+        void prepare_response() 
+        {
             response_buffer =
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Length: 13\r\n"
@@ -139,6 +139,15 @@ class Client
                 "Hello, world!";
             response_ready = true;
         }
+
+        // methods
+        bool isGET;
+        bool isPOST;
+        bool isDELETE;
+        void getMethod();
+        void deleteMethod();
+        //stats
+        RequestParseStatus status;
 
 };
 
@@ -164,5 +173,7 @@ class Server
         // int getEpollFd();
 };
 
+// void start_server(std::vector<ServerCo> &configs);
 
+void start_server();
 #endif

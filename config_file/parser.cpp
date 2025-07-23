@@ -69,7 +69,7 @@ void    Parser::parse()
                 throw std::runtime_error("Expected '{' after 'server'");
             }
             i++;
-                Server server;
+                ServerCo server;
             if (server.parsServer(tokens, i) == true)
             {
                 servers.push_back(server);

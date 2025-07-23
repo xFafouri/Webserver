@@ -11,14 +11,14 @@
 #include <fstream>
 #include <cstdlib>
 
-class Server;
+class ServerCo;
 
 class Parser
 {
     protected:
         std::vector<std::string> tokens;
     public:
-        std::vector<Server> servers;
+        std::vector<ServerCo> servers;
         void    parsing(std::string fileName);
         void    parse();
 };

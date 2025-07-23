@@ -9,7 +9,7 @@
 
 class locations;
 
-class Server
+class ServerCo
 {
     public:
     long long listen;
@@ -19,7 +19,7 @@ class Server
     long long client_max_body_size;
     std::vector<Location> locations;
 
-    Server();
+    ServerCo();
     bool parsServer(std::vector<std::string> &tokens, size_t &index);
     void printf_server();
     void validate();
