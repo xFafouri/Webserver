@@ -112,7 +112,7 @@ bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
         if (tokens[index] == "listen")
         {
             if (tokens[index + 2] != ";")
-                throw std::runtime_error("Missing ';' at the end of client max body size directive");
+                throw std::runtime_error("Missing ';' at the end of listen directive");
             if (listen_seen)
                     throw std::runtime_error("Duplicate 'listen' directive found.");
             else
@@ -193,7 +193,7 @@ bool    Server::parsServer(std::vector<std::string> &tokens, size_t &index)
             }
             else 
             {
-                throw std::runtime_error("client max body size is not an integer");
+                throw std::runtime_error("Invalid format for client_max_body_size. Use format like '10M'.");
             }
             index += 1;
         }
