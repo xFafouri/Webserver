@@ -3,7 +3,7 @@
 
 void    Parser::parsing(std::string fileName)
 {
-    std::ifstream file(fileName);
+    std::ifstream file(fileName.c_str());
     if (file.is_open())
     {
         if (file.peek() == std::ifstream::traits_type::eof())
@@ -81,9 +81,9 @@ void    Parser::parse()
             throw std::runtime_error("Error : for block of servers");
         i++;
     }
-    // servers[0].printf_server();
-    // std::cout << "======= here =========\n";
-    // servers[1].printf_server();
-    // std::cout << "======= here =========\n";
-    // servers[2].printf_server();
+    // for(size_t i = 0;i < servers.size(); i++)
+    // {
+    //     std::cout << "Server number ["  << i + 1 << "]"<< std::endl;
+    //     servers[i].printf_server();
+    // }
 }
