@@ -19,7 +19,8 @@ bool is_connection_closed(int fd)
 {
     int error = 0;
     socklen_t errlen = sizeof(error);
-    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &errlen) == -1 || error != 0) {
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &errlen) == -1 || error != 0) 
+    {
         return true;
     }
     return false;
@@ -63,9 +64,7 @@ int main()
                     perror("accept");
                     continue;
                 }
-                
                 fcntl(sock.client_fd, F_SETFL, O_NONBLOCK);
-
                 Client* new_client = new Client;
                 sock.sock_map[sock.client_fd] = new_client;
 
@@ -95,48 +94,49 @@ int main()
 
                 while (true)
                 {
-                   ssize_t bytes_read = A->read_from_fd(fd);
-                    if (!bytes_read && A->request_received)
+                //    ssize_t bytes_read = A->read_from_fd(fd);
+                    RequestParseStatus status = A->read_from_fd(fd);
+                    std::cout << "STATUS = "<<  status << std::endl; 
+                    if (status == PARSE_OK)
                     {
                         request_complete = true;
                         break;
                     }
-                    if (bytes_read < 0)
+                    else if (status == PARSE_INCOMPLETE)
                     {
-                        if ((errno == EAGAIN || errno == EWOULDBLOCK) && A->request_received)
-                        {
-                            request_complete = true;
-                            break;
-                        }
-                        if (errno == EAGAIN || errno == EWOULDBLOCK)
-                            break;
-
+                        break;
+                    }
+                    else if (status == PARSE_CONNECTION_CLOSED)
+                    {
+                        std::cout << "****read_from_fd connection closed\n";
                         connection_ok = false;
                         break;
                     }
-                    else if (bytes_read == 0)
+                    else if (status >= 400 && status < 600)
                     {
-                        std::cout << "DEBUG: read_from_fd indicates connection closed\n";
-
-                        // 🛠️🟢 Check if request was fully received *before* closing
-                        if (A->request_received)
-                        {
-                            request_complete = true;
-                        }
-                        else
-                        {
-                            connection_ok = false;
-                        }
+                        A->status_code = status;
+                        request_complete = true;
                         break;
                     }
                     else
                     {
-                        if (A->request_received)
-                        {
-                            request_complete = true;
-                            break;
-                        }
+                        connection_ok = false;
+                        break;
                     }
+                    //
+                    // if (bytes_read < 0)
+                    // {
+                    //     if ((errno == EAGAIN || errno == EWOULDBLOCK) && A->request_received)
+                    //     {
+                    //         request_complete = true;
+                    //         break;
+                    //     }
+                    //     if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    //         break;
+
+                    //     connection_ok = false;
+                    //     break;
+                    // 
                 }
                 if (!connection_ok)
                 {
@@ -146,7 +146,7 @@ int main()
 
                if (request_complete)
                 {
-                    std::cout << "Request complete, preparing response..." << std::endl;
+                    std::cout << "Request complete" << std::endl;
                     A->prepare_response();
 
                     struct epoll_event ev;
@@ -168,20 +168,23 @@ int main()
                 bool write_complete = false;
                 bool connection_ok = true;
                 
-                do {
+                while (!write_complete)
+                {
+                    // std::cout << status << std::endl;
                     write_complete = A->write_to_fd(fd);
                     
-                    if (!write_complete) {
-                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                            std::cout << "Partial write, will continue later" << std::endl;
-                            break;
-                        }
-                        std::cerr << "Write error: " << strerror(errno) << std::endl;
+                    if (!write_complete) 
+                    {
+                        // if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        //  {
+                        //     std::cout << "Partial write, will continue later" << std::endl;
+                        //     break;
+                        // }
+                        std::cerr << "Write error: " << std::endl;
                         connection_ok = false;
                         break;
                     }
-                } while (!write_complete);
-
+                }
                 if (!connection_ok) 
                 {
                     cleanup_connection(sock, fd, true);
@@ -193,14 +196,14 @@ int main()
                     {
                         cleanup_connection(sock, fd, true);
                     }
-                    
-                    else {
-                        // Switch back to reading mode
+                    else 
+                    {
                         A->reset_for_next_request();
                         struct epoll_event ev;
                         ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
                         ev.data.fd = fd;
-                        if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1) {
+                        if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1) 
+                        {
                             perror("epoll_ctl MOD");
                             cleanup_connection(sock, fd, true);
                         }
