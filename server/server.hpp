@@ -45,6 +45,7 @@ enum RequestParseStatus
     PARSE_INTERNAL_ERROR = 500,  // Logic/internal crash
     PARSE_CONNECTION_CLOSED = 0,  // Client closed
     REQUEST_URI_TOO_LONG = 414,    // URI Too Long
+    PAYLOAD_TOO_LARGE  = 413 // request entity was larger than limits 
     // REQUEST_NOT_FOUND = 404,       // Not Found
 };
 
@@ -103,12 +104,13 @@ class HandleReq
 };
 
 
-
-
-class Client 
+class Client
 {
     public:
         Client();
+        // Server config;
+        long long client_max_body_size;
+        std::vector<std::string> allowed_methods;
         HandleReq Hreq;
         // HandleRes Hres;
         std::string read_buffer;
@@ -117,13 +119,13 @@ class Client
         bool response_sent;
         std::string file_path;
 
-        RequestParseStatus read_from_fd(int client_fd);
+        RequestParseStatus read_from_fd(int client_fd, size_t max_body_size);
         bool write_to_fd(int client_fd);
         std::string trim(std::string str);
         std::vector<std::string> split( std::string& s, std::string& delimiter);
         bool check_methods();
         void test_chunked_parsing();
-        void handle_chunked_body();
+        void handle_chunked_body(size_t max_body_size);
         void reset_for_next_request();
         // ~Client();
         std::string response_buffer;
@@ -158,6 +160,10 @@ class Server
         int type;
         int protocol;
     public:
+        
+        // std::vector<Location> locations;
+        
+        ServerCo config;
         std::map<int, Client *> sock_map;
         struct sockaddr_in address;
         socklen_t addrlen;
@@ -168,12 +174,15 @@ class Server
         epoll_event server_event;
         epoll_event client_events;
         epoll_event events[1024];
-        Server(int domain, int type, int protocol);
+        // Server(int domain, int type, int protocol);
+        // Server(const std::string& host, int port);
+        Server(const ServerCo& conf);
         // int getServerFd();
         // int getEpollFd();
 };
 
-// void start_server(std::vector<ServerCo> &configs);
+
+void start_server(std::vector<ServerCo> &servers);
 
 void start_server();
 #endif
