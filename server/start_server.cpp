@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include <map>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -37,175 +38,195 @@ void cleanup_connection(Server& sock, int fd, bool remove_file = false)
     epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 }
 
-void start_server()
+void start_server(std::vector<ServerCo>& configs)
 {
-    Server sock(AF_INET, SOCK_STREAM, 0);
-    while (1)
+    std::vector<Server> servers;
+
+    for (size_t i = 0; i < configs.size(); ++i)
     {
-        int num_events = epoll_wait(sock.epoll_fd, sock.events, 1024, 4000);
-        // if (num_events == -1) 
-        // {
-        //     if (errno != EINTR) {
-        //         perror("epoll_wait");
-        //     }
-        //     continue;
-        // }
+        try {
+            servers.push_back(Server(configs[i]));
+        } catch (const std::exception& e) {
+            std::cerr << "Server init failed: " << e.what() << std::endl;
+        }
+    }
 
-        for (int j = 0; j < num_events; j++)
+    int global_epoll = epoll_create(1);
+    struct epoll_event events[1024];
+
+    for (size_t i = 0; i < servers.size(); ++i)
+    {
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        ev.data.fd = servers[i].server_fd;
+
+        if (epoll_ctl(global_epoll, EPOLL_CTL_ADD, servers[i].server_fd, &ev) == -1)
         {
-            int fd = sock.events[j].data.fd;
-            Client* A = sock.sock_map[fd];
+            perror("epoll_ctl ADD server_fd");
+            exit(1);
+        }
+    }
 
-            // Handle new connections
-            if (fd == sock.server_fd)
+    while (true)
+    {
+        int num_events = epoll_wait(global_epoll, events, 1024, 4000);
+        if (num_events == -1) 
+        {
+            perror("epoll_wait");
+            continue;
+        }
+        for (int i = 0; i < num_events; ++i)
+        {
+            int fd = events[i].data.fd;
+
+            Server* target_server = nullptr;
+            Client* client = nullptr;
+            
+            for (size_t j = 0; j < servers.size(); ++j)
             {
-                sock.client_fd = accept(sock.server_fd, (struct sockaddr*)&sock.address, &sock.addrlen);
-                if (sock.client_fd == -1) {
+                if (fd == servers[j].server_fd) 
+                {
+                    target_server = &servers[j];
+                    break;
+                }
+                if (servers[j].sock_map.count(fd))
+                {
+                    target_server = &servers[j];
+                    std::cout << "***" << std::endl;
+                    // target_server->
+                    client = servers[j].sock_map[fd];
+                    client->allowed_methods = target_server->config.locations[j].allowed_methods;
+                    break;
+                }
+            }
+
+            if (!target_server) 
+                continue;
+
+            if (fd == target_server->server_fd)
+            {
+                int client_fd = accept(fd, (sockaddr*)&target_server->address, &target_server->addrlen);
+                if (client_fd == -1) 
+                {
                     perror("accept");
                     continue;
                 }
-                fcntl(sock.client_fd, F_SETFL, O_NONBLOCK);
+
+                fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 Client* new_client = new Client;
-                sock.sock_map[sock.client_fd] = new_client;
+                target_server->sock_map[client_fd] = new_client;
 
                 struct epoll_event ev;
                 ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-                ev.data.fd = sock.client_fd;
-                if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_ADD, sock.client_fd, &ev) == -1) 
-                {
-                    perror("epoll_ctl ADD");
-                    cleanup_connection(sock, sock.client_fd, true);
+                ev.data.fd = client_fd;
+                if (epoll_ctl(global_epoll, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
+                    perror("epoll_ctl ADD client");
+                    cleanup_connection(*target_server, client_fd, true);
                 }
                 continue;
             }
 
-            // Handle errors
-            if (sock.events[j].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) 
+            if (events[i].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) 
             {
-                cleanup_connection(sock, fd, true);
+                cleanup_connection(*target_server, fd, true);
                 continue;
             }
-
-            // Handle read events
-            if (sock.events[j].events & EPOLLIN)
+            //handle read
+            if (events[i].events & EPOLLIN)
             {
                 bool connection_ok = true;
                 bool request_complete = false;
 
                 while (true)
                 {
-                //    ssize_t bytes_read = A->read_from_fd(fd);
-                    A->status = A->read_from_fd(fd); // request 
-                    std::cout << "STATUS = "<<  A->status << std::endl; 
-                    if (A->status == PARSE_OK)
+                    std::vector<std::string>::iterator it = client->allowed_methods.begin();
+                    for(; it != client->allowed_methods.end(); it++)
+                    {
+                        std::cout << "allowed method = " << *it << std::endl;
+                    }
+                    // target_server->allowed_methods
+                    client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
+                    std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
+                    std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
+                    std::cout << "Reading chunk size: " << client->Hreq.body.reading_chunk_size << "\n";
+                    std::cout << "STATUS = " << client->status << std::endl;
+                    if (client->status == PARSE_OK) 
                     {
                         request_complete = true;
                         break;
-                    }
-                    else if (A->status == PARSE_INCOMPLETE)
+                    } 
+                    else if (client->status == PARSE_INCOMPLETE) 
                     {
                         break;
-                    }
-                    else if (A->status == PARSE_CONNECTION_CLOSED)
-                    {
-                        std::cout << "****read_from_fd connection closed\n";
+                    } 
+                    else if (client->status == PARSE_CONNECTION_CLOSED) {
                         connection_ok = false;
                         break;
-                    }
-                    else if (A->status >= 400 && A->status < 600)
-                    {
-                        A->status_code = A->status;
+                    } 
+                    else if (client->status >= 400 && client->status < 600) {
+                        client->status_code = client->status;
                         request_complete = true;
                         break;
-                    }
-                    else
+                    } 
+                    else 
                     {
                         connection_ok = false;
                         break;
                     }
-                    //
-                    // if (bytes_read < 0)
-                    // {
-                    //     if ((errno == EAGAIN || errno == EWOULDBLOCK) && A->request_received)
-                    //     {
-                    //         request_complete = true;
-                    //         break;
-                    //     }
-                    //     if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    //         break;
-
-                    //     connection_ok = false;
-                    //     break;
-                    // 
                 }
-                if (!connection_ok)
-                {
-                    cleanup_connection(sock, fd, true);
+
+                if (!connection_ok) {
+                    cleanup_connection(*target_server, fd, true);
                     continue;
                 }
 
-               if (request_complete)
+                if (request_complete)
                 {
-                    std::cout << "Request complete" << std::endl;
-                    A->prepare_response();
-
+                    client->prepare_response();
                     struct epoll_event ev;
                     ev.events = EPOLLOUT | EPOLLET | EPOLLRDHUP;
                     ev.data.fd = fd;
-                    if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1)
+                    if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
                     {
-                        perror("epoll_ctl MOD");
-                        cleanup_connection(sock, fd, true);
+                        perror("epoll_ctl MOD EPOLLOUT");
+                        cleanup_connection(*target_server, fd, true);
                     }
                     continue;
                 }
             }
-
-            // Handle write events
-            if (sock.events[j].events & EPOLLOUT) 
+            // handle write
+            if (events[i].events & EPOLLOUT)
             {
-                std::cout << "EPOLLOUT event for fd: " << fd << std::endl;
                 bool write_complete = false;
                 bool connection_ok = true;
-                
+
                 while (!write_complete)
                 {
-                    // std::cout << status << std::endl;
-                    write_complete = A->write_to_fd(fd); // response 
-                    
+                    write_complete = client->write_to_fd(fd);
                     if (!write_complete) 
                     {
-                        // if (errno == EAGAIN || errno == EWOULDBLOCK)
-                        //  {
-                        //     std::cout << "Partial write, will continue later" << std::endl;
-                        //     break;
-                        // }
-                        std::cerr << "Write error: " << std::endl;
                         connection_ok = false;
                         break;
                     }
                 }
-                if (!connection_ok) 
+
+                if (!connection_ok)
+                    cleanup_connection(*target_server, fd, true);
+                else if (write_complete)
                 {
-                    cleanup_connection(sock, fd, true);
-                }
-                else if (write_complete) 
-                {
-                    std::cout << "Response fully sent to fd: " << fd << std::endl;
-                    if (A->Hreq.header.map_header["Connection"] == "close") 
+                    client->Hreq.header.map_header["Connection"] = "close";
+                    if (client->Hreq.header.map_header["Connection"] == "close")
+                        cleanup_connection(*target_server, fd, true);
+                    else
                     {
-                        cleanup_connection(sock, fd, true);
-                    }
-                    else 
-                    {
-                        A->reset_for_next_request();
+                        client->reset_for_next_request();
                         struct epoll_event ev;
                         ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
                         ev.data.fd = fd;
-                        if (epoll_ctl(sock.epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1) 
+                        if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
                         {
-                            perror("epoll_ctl MOD");
-                            cleanup_connection(sock, fd, true);
+                            perror("epoll_ctl MOD EPOLLIN");
+                            cleanup_connection(*target_server, fd, true);
                         }
                     }
                 }
