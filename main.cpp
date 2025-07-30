@@ -11,7 +11,8 @@ int main(int ac, char **av)
         return 1;
     }
     // must to hundle if there is no file of config file , i must to create a default one
-    try{
+    try
+    {
         std::string filename;
         if (ac == 1)
             filename = "./config_file/default.conf";
@@ -19,12 +20,11 @@ int main(int ac, char **av)
             filename = av[1];
         Parser object;
         object.parsing(filename);
-        // std::cout << "server_name =  " <<object.servers[0].server_names[0] << std::endl;
-        // start_server(object.servers);
-    }catch(std::exception &e)
+        start_server(object.servers);
+    }
+    catch(std::exception &e)
     {
         std::cout << e.what() << std::endl;
     }
-    start_server();
     return 0;
 }
