@@ -46,7 +46,8 @@ void start_server(std::vector<ServerCo>& configs)
     {
         try {
             servers.push_back(Server(configs[i]));
-        } catch (const std::exception& e) {
+        } catch (const std::exception& e) 
+        {
             std::cerr << "Server init failed: " << e.what() << std::endl;
         }
     }
@@ -95,7 +96,11 @@ void start_server(std::vector<ServerCo>& configs)
                     std::cout << "***" << std::endl;
                     // target_server->
                     client = servers[j].sock_map[fd];
-                    client->allowed_methods = target_server->config.locations[j].allowed_methods;
+                    
+                    client->config = servers[j].config;
+                    //
+                    // client->locations = target_server->config.locations;
+                    // client->allowed_methods = target_server->config.locations[j].allowed_methods;
                     break;
                 }
             }
@@ -115,7 +120,7 @@ void start_server(std::vector<ServerCo>& configs)
                 fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 Client* new_client = new Client;
                 target_server->sock_map[client_fd] = new_client;
-
+                // new_client->client_fd = client_fd;
                 struct epoll_event ev;
                 ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
                 ev.data.fd = client_fd;
@@ -139,12 +144,13 @@ void start_server(std::vector<ServerCo>& configs)
 
                 while (true)
                 {
-                    std::vector<std::string>::iterator it = client->allowed_methods.begin();
-                    for(; it != client->allowed_methods.end(); it++)
-                    {
-                        std::cout << "allowed method = " << *it << std::endl;
-                    }
+                    // std::vector<std::string>::iterator it = client->allowed_methods.begin();
+                    // for(; it != client->allowed_methods.end(); it++)
+                    // {
+                    //     std::cout << "allowed method = " << *it << std::endl;
+                    // }
                     // target_server->allowed_methods
+                    client->client_fd = fd;
                     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
                     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
                     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";

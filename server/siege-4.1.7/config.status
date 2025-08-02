@@ -541,7 +541,7 @@ _ASBOX
 #
 AMDEP_TRUE="" MAKE="make"
  prefix=/usr/local sysconfdir=${prefix}/etc localstatedir=${prefix}/var platform=pc-x86_64-linux-gnu
- VERSION=4.1.7 DATE="July-26-2025" PROGRAM="siege" AUTHOR="Jeffrey Fulmer, et al." EMAIL="jeff@joedog.org"
+ VERSION=4.1.7 DATE="August-01-2025" PROGRAM="siege" AUTHOR="Jeffrey Fulmer, et al." EMAIL="jeff@joedog.org"
  bindir=${prefix}${exec_prefix}/bin sh=/bin/sh
  bindir=${prefix}${exec_prefix}/bin sh=/bin/sh
  bindir=${prefix}${exec_prefix}/bin LREP=/usr/bin/perl
@@ -690,7 +690,7 @@ S["PLATFORM"]="pc-x86_64-linux-gnu"
 S["EMAIL"]="jeff@joedog.org"
 S["AUTHOR"]="Jeffrey Fulmer, et al."
 S["PROGRAM"]="siege"
-S["DATE"]="July-26-2025"
+S["DATE"]="August-01-2025"
 S["host_os"]="linux-gnu"
 S["host_vendor"]="pc"
 S["host_cpu"]="x86_64"
