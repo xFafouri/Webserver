@@ -45,7 +45,8 @@ enum RequestParseStatus
     PARSE_INTERNAL_ERROR = 500,  // Logic/internal crash
     PARSE_CONNECTION_CLOSED = 0,  // Client closed
     REQUEST_URI_TOO_LONG = 414,    // URI Too Long
-    PAYLOAD_TOO_LARGE  = 413 // request entity was larger than limits 
+    PAYLOAD_TOO_LARGE  = 413, // request entity was larger than limits
+    LENGTH_REQUIRED = 411, //Content-Length missing (for POST) 
     // REQUEST_NOT_FOUND = 404,       // Not Found
 };
 
@@ -108,8 +109,11 @@ class Client
 {
     public:
         Client();
-        // Server config;
+        // ServerCo config;
+        ServerCo config;
+        std::vector<Location> locations;
         long long client_max_body_size;
+        bool is_cgi = false;
         std::vector<std::string> allowed_methods;
         HandleReq Hreq;
         // HandleRes Hres;
@@ -118,6 +122,8 @@ class Client
         bool request_received;
         bool response_sent;
         std::string file_path;
+        int client_fd;
+        bool is_cgi_request();
 
         RequestParseStatus read_from_fd(int client_fd, size_t max_body_size);
         bool write_to_fd(int client_fd);
