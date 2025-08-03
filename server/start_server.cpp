@@ -95,7 +95,9 @@ void start_server(std::vector<ServerCo>& configs)
                     std::cout << "***" << std::endl;
                     // target_server->
                     client = servers[j].sock_map[fd];
-                    client->allowed_methods = target_server->config.locations[j].allowed_methods;
+                    // client->locations = target_server->config.locations;
+                    client->config = servers[j].config;
+                    // client->allowed_methods = target_server->config.locations[j].allowed_methods;
                     break;
                 }
             }
@@ -139,12 +141,13 @@ void start_server(std::vector<ServerCo>& configs)
 
                 while (true)
                 {
-                    std::vector<std::string>::iterator it = client->allowed_methods.begin();
-                    for(; it != client->allowed_methods.end(); it++)
-                    {
-                        std::cout << "allowed method = " << *it << std::endl;
-                    }
+                    // std::vector<std::string>::iterator it = client->allowed_methods.begin();
+                    // for(; it != client->allowed_methods.end(); it++)
+                    // {
+                    //     std::cout << "allowed method = " << *it << std::endl;
+                    // }
                     // target_server->allowed_methods
+                    
                     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
                     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
                     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";

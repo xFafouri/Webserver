@@ -108,9 +108,10 @@ class Client
 {
     public:
         Client();
-        // Server config;
+        ServerCo config;
         long long client_max_body_size;
         std::vector<std::string> allowed_methods;
+        std::vector<Location> locations;
         HandleReq Hreq;
         // HandleRes Hres;
         std::string read_buffer;
@@ -119,7 +120,7 @@ class Client
         bool response_sent;
         std::string file_path;
 
-        RequestParseStatus read_from_fd(int client_fd, size_t max_body_size);
+        RequestParseStatus read_from_fd(int client_fd, long long max_body_size);
         bool write_to_fd(int client_fd);
         std::string trim(std::string str);
         std::vector<std::string> split( std::string& s, std::string& delimiter);
@@ -130,6 +131,7 @@ class Client
         // ~Client();
         std::string response_buffer;
         bool response_ready;
+        int client_fd;
         size_t status_code;       
         void prepare_response() 
         {
