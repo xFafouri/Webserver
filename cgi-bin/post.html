@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Files</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            padding: 15px;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 14px 20px;
+            margin: 0 10px;
+            font-size: 18px;
+            transition: 0.3s;
+        }
+        .navbar a:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            margin-top: 60px;
+            width: 90%;
+            max-width: 500px;
+        }
+        .upload-form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            margin: 20px 0;
+            width: 100%;
+        }
+        .file-input-wrapper input[type="file"] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-input-label {
+            display: block;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            transition: background 0.3s, border-color 0.3s;
+            width: 100%;
+            cursor: pointer;
+        }
+        .file-input-label:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+        .file-input-label:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .upload-form input[type="submit"] {
+            padding: 12px 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            margin-top: 20px;
+        }
+        .upload-form input[type="submit"]:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(1.05);
+        }
+        .upload-form input[type="submit"]:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="../index.html">Home</a>
+        <a href="/get">Get</a>
+        <a href="/post">Post</a>
+        <a href="/delete">Delete</a>
+        <a href="/cgi">CGI</a>
+        <a href="/cookie">Cookies</a>
+        <a href="/login" class="link">Login</a>
+    </div>
+    <div class="container">
+        <h1>Upload Files</h1>
+        <form class="upload-form" action="upload/" method="post" enctype="multipart/form-data">
+            <div class="file-input-wrapper">
+                <input type="file" name="fileToUpload" id="fileToUpload" required>
+                <label for="fileToUpload" class="file-input-label">Choose a file to upload</label>
+            </div>
+            <input type="submit" value="Upload File">
+        </form>
+    </div>
+</body>
+</html>

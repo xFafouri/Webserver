@@ -1,48 +1,5 @@
 #include "server.hpp"
-#include <cstddef>
-#include <cstdlib>
-#include <exception>
-#include <fstream>
-#include <sstream>
-#include <stdexcept>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/stat.h>
 
-
-
-// Server::Server(int domain, int type, int protocol)
-// {
-//     // domain = AF_INET;
-//     // type = SOCK_STREAM;
-//     // protocol = 0;
-
-//     server_fd = socket(domain, type, protocol);
-
-//     address.sin_family = AF_INET;
-//     address.sin_port = htons(8081);
-//     address.sin_addr.s_addr = INADDR_ANY;
-
-//     int optval = 1;
-//     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
-//     {
-//         perror("setsockopt");
-//         close(server_fd);
-//         exit(0);
-//     }
-//     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)))
-//     {
-//         perror("");
-//         exit(0);
-//     }
-//     listen(server_fd, 128);
-//     epoll_fd = epoll_create(1);
-//     server_event.events = EPOLLIN;
-//     server_event.data.fd = server_fd;
-//     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &server_event);
-//     addrlen = sizeof(address);
-
-// }
 
 Server::Server(const ServerCo& conf) : config(conf)
 {
@@ -83,12 +40,29 @@ Server::Server(const ServerCo& conf) : config(conf)
 
 Client::Client()
 {
+    cgi_bin = false;
     request_received = false;
     response_sent = false;
-
+    is_cgi = false;
     isGET = false;
     isPOST = false;
     isDELETE = false;
+}
+
+void Body::append(const std::string& new_data)
+{
+    data += new_data;
+}
+
+void Body::reset() 
+{
+    data.clear();
+    raw_body.clear();
+    expected_size = 0;
+    chunked = false;
+    is_done = false;
+    current_chunk_size = 0;
+    reading_chunk_size = true;
 }
 
 std::string Client::trim(std::string str)
@@ -125,26 +99,10 @@ std::vector<std::string> spliting( std::string& s, std::string& delimiter)
     return tokens;
 }
 
-bool Client::check_methods()
-{
-    // std::string methods[3] = {"GET","POST", "DELETE"};
-    std::vector<std::string>::iterator it = find(allowed_methods.begin(),allowed_methods.end(), Hreq.method);
-    if (it != allowed_methods.end())
-    {
-        return true;
-    }
-    else {
-        return false;
-    }
-    // for (int i = 0; i < methods->length(); i++)
-    // {
-    //     if (methods[i] == Hreq.method)
-    //     {
-    //         return true;
-    //     }
-    // }
-    // return false;
-}
+// bool Client::check_methods()
+// {
+
+// }
 
 void Client::reset_for_next_request() 
 {
@@ -176,6 +134,7 @@ void Client::reset_for_next_request()
     Hreq.body_map.clear();
     // request_received = false;
 }
+
 
 void Client::handle_chunked_body(size_t max_body_size) 
 {
@@ -217,7 +176,7 @@ void Client::handle_chunked_body(size_t max_body_size)
     }
 }
 
-std::string ft_content_type(const std::string& full_path)
+std::string Client::ft_content_type(const std::string& full_path)
 {
     if (full_path.find(".html") != std::string::npos)
         return "text/html";
@@ -275,214 +234,29 @@ std::string ft_content_type(const std::string& full_path)
         return "application/octet-stream"; // Default type for unknown extensions
 }
 
-
-void Client::getMethod()
+std::string generate_temp_file_path()
 {
-    const Location* matchedLocation = NULL;
-    for (size_t i = 0; i < config.locations.size(); ++i)
+    char filename[] = "/tmp/body_XXXXXX";
+    int fd = mkstemp(filename);
+    if (fd == -1)
     {
-        if (Hreq.uri.find(config.locations[i].path) == 0)
-        {
-            if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
-            {
-                matchedLocation = &config.locations[i];
-            }
-        }
+        std::cerr << "mkstemp failed: " << strerror(errno) << std::endl;
+        return "";
     }
-
-    std::string response;
-    if (!matchedLocation)
-    {
-        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-        send(client_fd, response.c_str(), response.size(), 0);
-        return;
-    }
-
-    std::string location_path = matchedLocation->path;
-    std::string relative_uri = Hreq.uri.substr(location_path.length());
-
-    if (!relative_uri.empty() && relative_uri[0] == '/')
-        relative_uri.erase(0, 1);
-
-    std::string full_dir_path = matchedLocation->root + location_path;
-    if (!full_dir_path.empty() && full_dir_path.back() == '/')
-        full_dir_path.pop_back(); // avoid double slashes
-
-    std::string full_path = full_dir_path;
-    if (!relative_uri.empty())
-        full_path += "/" + relative_uri;
-
-    struct stat st;
-    if (stat(full_path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
-    {
-        // REDIRECT: If URI does not end with '/' but is a directory
-        if (Hreq.uri.back() != '/')
-        {
-            std::string redirect_uri = Hreq.uri + "/";
-            response = "HTTP/1.1 301 Moved Permanently\r\n";
-            response += "Location: " + redirect_uri + "\r\n";
-            response += "Content-Length: 0\r\n\r\n";
-            send(client_fd, response.c_str(), response.size(), 0);
-            return;
-        }
-
-        std::string index_path;
-        bool foundIndex = false;
-
-        for (size_t i = 0; i < matchedLocation->index_files.size(); ++i)
-        {
-            index_path = full_path + "/" + matchedLocation->index_files[i];
-            if (access(index_path.c_str(), F_OK) == 0)
-            {
-                foundIndex = true;
-                break;
-            }
-        }
-
-        if (foundIndex)
-        {
-            std::ifstream file(index_path.c_str());
-            if (!file)
-            {
-                response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-                send(client_fd, response.c_str(), response.size(), 0);
-                return;
-            }
-
-            std::ostringstream ss;
-            ss << file.rdbuf();
-            std::string body = ss.str();
-            response = "HTTP/1.1 200 OK\r\n";
-            response += "Content-Type: text/html\r\n";
-            response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
-            response += body;
-            send(client_fd, response.c_str(), response.size(), 0);
-            return;
-        }
-        else if (matchedLocation->autoindex)
-        {
-            response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-            response += "<html><body><h1>Autoindex not implemented yet</h1></body></html>";
-            send(client_fd, response.c_str(), response.size(), 0);
-            return;
-        }
-        else
-        {
-            response = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
-            send(client_fd, response.c_str(), response.size(), 0);
-            return;
-        }
-    }
-    else if (stat(full_path.c_str(), &st) == 0 && S_ISREG(st.st_mode))
-    {
-        std::ifstream file(full_path.c_str());
-        if (!file)
-        {
-            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-            send(client_fd, response.c_str(), response.size(), 0);
-            return;
-        }
-
-        std::ostringstream ss;
-        ss << file.rdbuf();
-        std::string body = ss.str();
-        std::string content_type = ft_content_type(full_path);
-        response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: " + content_type + "\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
-        response += body;
-        send(client_fd, response.c_str(), response.size(), 0);
-        return;
-    }
-    else
-    {
-        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-        send(client_fd, response.c_str(), response.size(), 0);
-        return;
-    }
+    close(fd);
+    return std::string(filename);
 }
 
-
-void Client::deleteMethod()
-{
-
-}
-// RequestParseStatus Client::read_from_fd(int client_fd, size_t max_body_size)
-// {
-//     char buffer[1024];
-//     ssize_t bytes_received;
-
-//     while (true)
-//     {
-//         bytes_received = recv(client_fd, buffer, sizeof(buffer), 0);
-
-//         if (bytes_received == 0)
-//             return PARSE_CONNECTION_CLOSED;
-
-//         if (bytes_received < 0)
-//             break; // Don't check errno, just exit loop on any error
-
-//         // Parse immediately
-//         RequestParseStatus parseResult = reqParser.parse(Hreq, buffer, buffer + bytes_received);
-
-//         if (parseResult == PARSE_ERROR)
-//             return PARSE_ERROR;
-
-//         if (parseResult == PARSE_SUCCESS)
-//             return PARSE_SUCCESS;
-
-//         // clear buffer just for safety
-//         memset(buffer, 0, sizeof(buffer));
-
-//         // Optional size check
-//         if (Hreq.body._body.size() > max_body_size)
-//             return PARSE_ERROR;
-//     }
-
-//     return PARSE_INCOMPLETE;
-// }
-
-
-// std::string write_body_to_tempfile(const std::string& body)
-// {
-//     std::string tmpTemplate = "/tmp/body_";
-//     char tmpPath[tmpTemplate.size() + 1];
-//     std::strcpy(tmpPath, tmpTemplate.c_str());
-
-//     int fd = mkstemp(tmpPath);
-//     if (fd == -1)
-//     {
-//         std::cerr << "mkstemp failed: " << strerror(errno) << std::endl;
-//         return "";
-//     }
-
-//     ssize_t written = write(fd, body.c_str(), body.size());
-//     if (written < 0)
-//     {
-//         std::cerr << "write failed: " << strerror(errno) << std::endl;
-//         close(fd);
-//         return "";
-//     }
-
-//     close(fd);
-//     return std::string(tmpPath);
-// }
 
 
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
-    std::cout << "[read_buffer before parsing] = \n" << read_buffer << std::endl;
-    std::cout << "[Hreq.body._body] = \n" << Hreq.body._body << std::endl;
-    char recv_buffer[1024];
+    char recv_buffer[4096];
     // 
-    std::cerr << "[DEBUG] Entered parser function" << std::endl;
     this->client_fd = client_fd;
     while (true)
     {
         ssize_t n = recv(client_fd, recv_buffer, sizeof(recv_buffer),0);
-        std::cerr << "[DEBUG] After recv()" << std::endl;
-        // std::cout << "N =================> = " << n << std::endl;
-        // usleep(500);
         if (n < 0)
         {
             break;
@@ -497,22 +271,6 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 
 
     std::string boundary;
-
-    // size_t pos = read_buffer.find("\r\n");
-    // if (pos == std::string::npos)
-    //     return -1;
-
-    // std::string request_line = read_buffer.substr(0, pos);
-    // std::string headers = read_buffer.substr(pos + 2, read_buffer.find("\r\n\r\n") - (pos + 2));
-    // size_t p = read_buffer.find("\r\n\r\n");
-    // std::cout << "p = "  <<  p << std::endl;
-
-    // Hreq.body._body = read_buffer.substr(p + 4, read_buffer.size() - 1);
-    // std::cout << "read_buffer = " << read_buffer << std::endl;
-    // std::cout <<  "BODY = " << Hreq.body._body << std::endl;
-
-    // Hreq.buffer = read_buffer.substr(p + 4, read_buffer.size() - 1);
-    std::cout << "TEST" << std::endl;
     if (!Hreq.header.parsed)
     {
         std::cout << "read_buffer = " << read_buffer << std::endl;
@@ -521,13 +279,12 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 
         if (header_end == std::string::npos) 
         {
-            return PARSE_INCOMPLETE; // Need more data 
+            return PARSE_INCOMPLETE;
         }
         //  Parse the request line
         size_t pos = read_buffer.find("\r\n");
         if (pos == std::string::npos)
             return PARSE_BAD_REQUEST;; //bad request
-        std::cout << "TEST3" << std::endl;
         std::string request_line = read_buffer.substr(0, pos);
         std::istringstream iss(request_line);
         iss >> Hreq.method >> Hreq.uri >> Hreq.http_v;
@@ -535,15 +292,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         if (Hreq.method == "GET")
         {
             isGET = true;
-            getMethod();
-            // std::cout << "hello world \n";
-            // Hreq.uri;
-            // Hreq.http_v;
-            // Hreq.method;
-            // status 
         }
-
-
         if (Hreq.uri.length() > 4096)
         {
             return REQUEST_URI_TOO_LONG;
@@ -566,31 +315,46 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         }
         // if (!check_methods())
         // {
-            //     std::cout << "Error Method" << std::endl;
-            //     return REQUEST_METHOD_NOT_ALLOWED;
-            // }
+        //     std::cout << "Error Method" << std::endl;
+        //     return REQUEST_METHOD_NOT_ALLOWED;
+        // }
         Hreq.header.parsed = true;
+        if (is_cgi_request())
+        {
+            std::cout << "IS CGI " << std::endl;
+            is_cgi = true;
+        }
+        std::cout << "HERE" << std::endl;
         
         // check transfer encoding or content-length
-        if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end())
+        if (Hreq.method == "POST")
         {
-            std::cout << "3*" << std::endl;
-            std::string str = Hreq.map_header["Content-Length"];
-            Hreq.body.expected_size = std::atoi(str.c_str());
-            
-            // check max body size
-            std::cout << "max_body_size = " << max_body_size << std::endl;
-            std::cout << "expected_size = " << Hreq.body.expected_size << std::endl;
-            if (Hreq.body.expected_size > max_body_size)
-            return PAYLOAD_TOO_LARGE;
-        // Hreq.body.expected_size = std::stoi(Hreq.header.map_header["Content-Length"]);
-        if (Hreq.header.map_header.find("Content-Type")  != Hreq.map_header.end()) 
-        {
-            std::cout << "here" << std::endl;
-                Hreq.content_type = Hreq.map_header["Content-Type"];
-                Hreq.content_type = trim(Hreq.content_type);
+            if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end())
+            {
+                std::string str = Hreq.map_header["Content-Length"];
+                Hreq.body.expected_size = std::atoi(str.c_str());
+                
+                // check max body size
+                std::cout << "max_body_size = " << max_body_size << std::endl;
+                std::cout << "expected_size = " << Hreq.body.expected_size << std::endl;
+                if (Hreq.body.expected_size > max_body_size)
+                    return PAYLOAD_TOO_LARGE;
+                // Hreq.body.expected_size = std::stoi(Hreq.header.map_header["Content-Length"]);
+                if (Hreq.header.map_header.find("Content-Type")  != Hreq.map_header.end()) 
+                {
+                    std::cout << "here" << std::endl;
+                        Hreq.content_type = Hreq.map_header["Content-Type"];
+                        Hreq.content_type = trim(Hreq.content_type);
+                }
+                else
+                {
+                    return PARSE_BAD_REQUEST;
+                }
             }
-        } 
+            else {
+                return PARSE_BAD_REQUEST;
+            }
+        }
         else if (Hreq.map_header.find("Transfer-Encoding")  != Hreq.map_header.end() &&
         Hreq.map_header["Transfer-Encoding"].find("chunked") != std::string::npos) 
         {
@@ -601,7 +365,6 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             request_received = true;
             return PARSE_OK;
         }
-        std::cout << "heeeeeeeeeeere\n";
         // Hreq.body._body = read_buffer.substr(header_end + 4);
         Hreq.body._body.append(read_buffer.substr(header_end + 4));
         if (Hreq.body._body.size() > max_body_size) 
@@ -610,6 +373,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         }
         // read_buffer.clear(); // ghda ngul lik fin <3
     }
+    std::cout << "HERE2" << std::endl;
 
     std::cout << "expected_size = " <<  Hreq.body.expected_size << std::endl;
     
@@ -630,17 +394,20 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             }
             if (Hreq.body.is_done) 
             {
-        std::cout << "the hreq.method is ----> " << Hreq.method << std::endl;
-
-
-                if (Hreq.method == "POST")
+                if (Hreq.method == "POST" && is_cgi == false)
                 {
-
-                    file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
+                    std::string file_path = generate_temp_file_path();
+                    std::cout << "file_path = " <<  file_path << std::endl;
                     std::ofstream outfile(file_path.c_str());
-                    std::ofstream out("/tmp/body");
-                    out << Hreq.body.data;
-                    out.close();
+                    if (!outfile.is_open()) 
+                    {
+                        std::cerr << "Failed to open file: " << file_path << std::endl;
+                    } 
+                    else 
+                    {
+                        outfile << Hreq.body.data;
+                        outfile.close();
+                    }
                     Hreq.body.reset();
                     request_received = true;
                 }
@@ -651,31 +418,21 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         else if (Hreq.body.expected_size > 0)
         {
             std::cout << "BUFFER = " << read_buffer << std::endl;
-            // size_t p = read_buffer.find("\r\n\r\n");
-
-            // std::string body = read_buffer.substr(p + 4, read_buffer.size() - 1);
-            // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.body._body.size());
-            // Hreq.body.append(Hreq.body._body.substr(0, to_read));
-            // Hreq.body._body.erase(0, to_read);
-
-            // size_t to_read = std::min(Hreq.body.expected_size - Hreq.body.data.size(), Hreq.buffer.size());
-            // Hreq.buffer.append(Hreq.buffer.substr(0, to_read));
-            // Hreq.buffer.erase(0, to_read);
-            
             std::cout << "BODY = " << Hreq.body._body << std::endl;
             std::cout << "Content_Type = " <<  Hreq.content_type << std::endl;
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
                 std::cout << "app/json" << std::endl;
-                if (Hreq.method == "POST")
+                if (Hreq.method == "POST" && is_cgi == false)
                 {
-                    file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
+                    std::string file_path = generate_temp_file_path();
                     std::ofstream outfile(file_path.c_str());
                     if (outfile.is_open()) 
                     {
                         outfile << Hreq.body._body;
                         outfile.close();
                     }
+                    Hreq.body._body.clear();
                 }
                 else {
                     Hreq.body._body.clear();
@@ -716,13 +473,6 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                         }
                     }
                 }
-                // std::map<std::string, std::string>::iterator ittt = Hreq.body_map.begin();
-
-                // for(;ittt  != Hreq.body_map.end(); ittt++)
-                // {
-                //     std::cout << *ittt
-                // }
-                // if (Hreq.body_map )
                 Hreq.body.chunk_done = true;
                 request_received = true;
             }
@@ -770,11 +520,11 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 part =  part.substr(pos + 4, end - 1);
                                 std::cout << "Part = " << part;
                             }
-                            std::string file_path = "/tmp/" + filename;
-                            std::ofstream outfile(file_path.c_str());
-                            std::cout << "part = " << part << std::endl;
-                            if (Hreq.method == "POST")
+                            if (Hreq.method == "POST" && is_cgi == false)
                             {
+                                std::string file_path = generate_temp_file_path();
+                                std::ofstream outfile(file_path.c_str());
+                                // std::cout << "part = " << part << std::endl;
                                 if (outfile.is_open()) 
                                 {
                                     outfile << part;
@@ -808,37 +558,26 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                     body_part = body_part.substr(0, boundary_end);
                                 }
                                 
-                                file_path = "/tmp/req_client_fd_" + std::to_string(client_fd);
-                                std::ofstream outfile(file_path.c_str());
-                                if (Hreq.method == "POST")
+                                if (Hreq.method == "POST" && is_cgi == false)
                                 {
+                                    file_path = generate_temp_file_path();
+                                    std::ofstream outfile(file_path.c_str());
                                     if (outfile.is_open()) 
                                     {
                                         outfile << body_part;
                                         outfile.close();
                                     }
                                 }
+                                else {
+                                    body_part.clear();
+                                }
                                 std::cout << "content = " << body_part;
                             }
-                            // store the content in map
-                            // std::map<std::string,std::string> multipart_body;
-                            // multipart_body.insert(std::make_pair(name, content));
                         }
                     }
-                    // find /r/n/r/n
-                    // size_t pos = part.find("\r\n\r\n");
-                    // if (pos != std::string::npos)
-                    // {
-                    //     size_t end = part.find("\r\n");
-                    //     part = part.substr(pos + 4, end - 1);
-                    //     std::cout << "Part = " << part;
-                    // }
-                    ///-------------
                         std::cout << "body vector = " << *it << std::endl;
                         part.clear();
                     }
-                    // std::stringstream pair_stream(body_line);
-                    //multipart work for first time TODO
                     Hreq.body.chunk_done = true;
                     request_received = true;
                     filename.clear();
@@ -852,68 +591,11 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                 }
             }
         }
-        std::cout << "HELLO from BEFORE method print" << std::endl;
     
     if (request_received)
     {
-        // reset_for_next_request();
         return PARSE_OK;
     }
     else
         return PARSE_INCOMPLETE;
 }
-
-
-bool Client::write_to_fd(int fd)
-{
-    std::cout << ">> Attempting to write to fd\n";
-
-    if (!response_ready || response_buffer.empty()) 
-    {
-        std::cout << ">> Not ready to write yet\n";
-        return true; // Nothing to write yet
-    }
-
-    ssize_t sent = send(fd, response_buffer.c_str(), response_buffer.length(), 0);
-    std::cout << ">> Sent bytes: " << sent << "\n";
-
-    if (sent <= 0)
-    {
-        std::cerr << ">> Failed to send response or client closed connection\n";
-        return false;
-    }
-
-    if (static_cast<size_t>(sent) == response_buffer.length()) {
-        std::cout << ">> Response sent completely\n";
-        response_buffer.clear();
-        response_ready = false;
-        close(client_fd);
-        return true;
-    }
-
-    response_buffer = response_buffer.substr(sent);
-    std::cout << ">> Partial send. Remaining: " << response_buffer.length() << "\n";
-    return false;
-}
-
-
-
-// bool Client::write_to_fd(int fd)
-// {
-//     const std::string response =
-//         "HTTP/1.1 200 OK\r\n"
-//         "Content-Length: 13\r\n"
-//         "Content-Type: text/plain\r\n"
-//         "\r\n"
-//         "Hello, world!";
-
-//     ssize_t sent = send(fd, response.c_str(), response.length(), 0);
-//     if (sent <= 0)
-//     {
-//         std::cerr << "Failed to send response or client closed connection\n";
-//         return false;
-//     }
-
-//     std::cout << "Response sent. Closing connection.\n";
-//     return false; 
-// }
