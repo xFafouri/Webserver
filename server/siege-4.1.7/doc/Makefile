@@ -175,7 +175,7 @@ CXXCPP = g++ -E
 CXXDEPMODE = depmode=none
 CXXFLAGS = -g -O2
 CYGPATH_W = echo
-DATE = August-01-2025
+DATE = July-26-2025
 DEFS = -DHAVE_CONFIG_H
 DEPDIR = .deps
 ECHO = echo
