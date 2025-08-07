@@ -217,60 +217,191 @@ void Client::handle_chunked_body(size_t max_body_size)
     }
 }
 
+std::string ft_content_type(const std::string& full_path)
+{
+    if (full_path.find(".html") != std::string::npos)
+        return "text/html";
+    else if (full_path.find(".css") != std::string::npos)
+        return "text/css";
+    else if (full_path.find(".js") != std::string::npos)
+        return "application/javascript";
+    else if (full_path.find(".png") != std::string::npos)
+        return "image/png";
+    else if (full_path.find(".jpg") != std::string::npos || full_path.find(".jpeg") != std::string::npos)
+        return "image/jpeg";
+    else if (full_path.find(".gif") != std::string::npos)
+        return "image/gif";
+    else if (full_path.find(".svg") != std::string::npos)
+        return "image/svg+xml";
+    else if (full_path.find(".ico") != std::string::npos)
+        return "image/x-icon";
+    else if (full_path.find(".json") != std::string::npos)
+        return "application/json";
+    else if (full_path.find(".txt") != std::string::npos)
+        return "text/plain";
+    else if (full_path.find(".xml") != std::string::npos)
+        return "application/xml";
+    else if (full_path.find(".pdf") != std::string::npos)
+        return "application/pdf";
+    else if (full_path.find(".mp4") != std::string::npos)
+        return "video/mp4";
+    else if (full_path.find(".mp3") != std::string::npos)
+        return "audio/mpeg";
+    else if (full_path.find(".woff") != std::string::npos)
+        return "font/woff";
+    else if (full_path.find(".woff2") != std::string::npos)
+        return "font/woff2";
+    else if (full_path.find(".ttf") != std::string::npos)
+        return "font/ttf";
+    else if (full_path.find(".otf") != std::string::npos)
+        return "font/otf";
+    else if (full_path.find(".eot") != std::string::npos)
+        return "application/vnd.ms-fontobject";
+    else if (full_path.find(".zip") != std::string::npos)
+        return "application/zip";
+    else if (full_path.find(".tar") != std::string::npos)
+        return "application/x-tar";
+    else if (full_path.find(".gz") != std::string::npos)
+        return "application/gzip";
+    else if (full_path.find(".rar") != std::string::npos)
+        return "application/x-rar-compressed";
+    else if (full_path.find(".csv") != std::string::npos)
+        return "text/csv";
+    else if (full_path.find(".md") != std::string::npos)
+        return "text/markdown";
+    else if (full_path.find(".yaml") != std::string::npos || full_path.find(".yml") != std::string::npos)
+        return "application/x-yaml";
+    else
+        return "application/octet-stream"; // Default type for unknown extensions
+}
+
+
 void Client::getMethod()
 {
-    size_t i;
-    bool index_flag = false;
-    for (i = 0; i < config.locations.size(); i++)
+    const Location* matchedLocation = NULL;
+    for (size_t i = 0; i < config.locations.size(); ++i)
     {
-        if (Hreq.uri == config.locations[i].path)
+        if (Hreq.uri.find(config.locations[i].path) == 0)
         {
-            std::cout << config.locations[i].path << " <---- paths\n";
-            index_flag = true;
-            break;
+            if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
+            {
+                matchedLocation = &config.locations[i];
+            }
         }
     }
-    std::string full_path = config.locations[i].root + Hreq.uri;
-    std::cout << "full path is ---> " << full_path << std::endl;
+
+    std::string response;
+    if (!matchedLocation)
+    {
+        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+
+    std::string location_path = matchedLocation->path;
+    std::string relative_uri = Hreq.uri.substr(location_path.length());
+
+    if (!relative_uri.empty() && relative_uri[0] == '/')
+        relative_uri.erase(0, 1);
+
+    std::string full_dir_path = matchedLocation->root + location_path;
+    if (!full_dir_path.empty() && full_dir_path.back() == '/')
+        full_dir_path.pop_back(); // avoid double slashes
+
+    std::string full_path = full_dir_path;
+    if (!relative_uri.empty())
+        full_path += "/" + relative_uri;
+
     struct stat st;
     if (stat(full_path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
     {
-        std::cout << "It's a folder. Looking for index files...\n";
-        for (size_t j = 0; j < config.locations[i].index_files.size(); ++j) 
+        // REDIRECT: If URI does not end with '/' but is a directory
+        if (Hreq.uri.back() != '/')
         {
-            std::string index_file = full_path  + config.locations[i].index_files[j];
-            std::cout << index_file << " <---- \n"; 
-            if (access(index_file.c_str(), F_OK) == 0) 
+            std::string redirect_uri = Hreq.uri + "/";
+            response = "HTTP/1.1 301 Moved Permanently\r\n";
+            response += "Location: " + redirect_uri + "\r\n";
+            response += "Content-Length: 0\r\n\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
+
+        std::string index_path;
+        bool foundIndex = false;
+
+        for (size_t i = 0; i < matchedLocation->index_files.size(); ++i)
+        {
+            index_path = full_path + "/" + matchedLocation->index_files[i];
+            if (access(index_path.c_str(), F_OK) == 0)
             {
-                std::cout << "heerree \n";
-                full_path = index_file;
+                foundIndex = true;
                 break;
             }
-       }
-       std::cout << "new full path is --> " << full_path << std::endl;
+        }
+
+        if (foundIndex)
+        {
+            std::ifstream file(index_path.c_str());
+            if (!file)
+            {
+                response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+                send(client_fd, response.c_str(), response.size(), 0);
+                return;
+            }
+
+            std::ostringstream ss;
+            ss << file.rdbuf();
+            std::string body = ss.str();
+            response = "HTTP/1.1 200 OK\r\n";
+            response += "Content-Type: text/html\r\n";
+            response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+            response += body;
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
+        else if (matchedLocation->autoindex)
+        {
+            response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+            response += "<html><body><h1>Autoindex not implemented yet</h1></body></html>";
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
+        else
+        {
+            response = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
     }
-    std::ifstream file(full_path.c_str());
-    if (!file.is_open())
-        throw std::runtime_error("Failed to open file");
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string body = buffer.str();
-    std::stringstream response;
-    response << "HTTP/1.1 200 OK\r\n";
-    response << "Content-Length: " << body.size() << "\r\n";
-    response << "Content-Type: text/html\r\n\r\n";
-    response << body;
-    // std::cout << "here   --->>>>" << client_fd << std::endl;
-    send(client_fd, response.str().c_str(), response.str().size(), 0);
-    // return;
+    else if (stat(full_path.c_str(), &st) == 0 && S_ISREG(st.st_mode))
+    {
+        std::ifstream file(full_path.c_str());
+        if (!file)
+        {
+            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
 
-
-    // if (index_flag == true)
-    // {
-    //     std::cout << "index ---> " << i << std::endl;
-    //     std::cout << "root ---> " <<  config.locations[i].root << std::endl;
-    // }
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        std::string body = ss.str();
+        std::string content_type = ft_content_type(full_path);
+        response = "HTTP/1.1 200 OK\r\n";
+        response += "Content-Type: " + content_type + "\r\n";
+        response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+        response += body;
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    else
+    {
+        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
 }
+
 
 void Client::deleteMethod()
 {
@@ -725,7 +856,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
     
     if (request_received)
     {
-        reset_for_next_request();
+        // reset_for_next_request();
         return PARSE_OK;
     }
     else
@@ -756,6 +887,7 @@ bool Client::write_to_fd(int fd)
         std::cout << ">> Response sent completely\n";
         response_buffer.clear();
         response_ready = false;
+        close(client_fd);
         return true;
     }
 
