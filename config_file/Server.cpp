@@ -18,8 +18,16 @@ void ServerCo::validate() {
         throw std::runtime_error("At least one location block required");
 
     for (size_t i = 0; i < locations.size(); i++) {
-        if (locations[i].root.empty())
+        if (locations[i].root.empty() && locations[i].return_value.empty())
             throw std::runtime_error("Location block missing 'root' directive");
+    }
+    for (size_t i = 0; i < locations.size(); i++)
+    {
+        for (size_t j = i + 1; j < locations.size(); j++)
+        {
+            if (locations[i].path == locations[j].path)
+                throw std::runtime_error("Configuration Error: A path cannot be assigned to more than one location block.");
+        }
     }
 }
 

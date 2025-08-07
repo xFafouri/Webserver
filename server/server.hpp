@@ -19,6 +19,18 @@
 #include <stdexcept>
 #include <string>
 #include <sys/types.h>
+#include <sys/wait.h>
+
+
+#include <cstddef>
+#include <cstdlib>
+#include <exception>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/stat.h>
 
 #include "../config_file/parser.hpp"
 
@@ -45,8 +57,7 @@ enum RequestParseStatus
     PARSE_INTERNAL_ERROR = 500,  // Logic/internal crash
     PARSE_CONNECTION_CLOSED = 0,  // Client closed
     REQUEST_URI_TOO_LONG = 414,    // URI Too Long
-    PAYLOAD_TOO_LARGE  = 413, // request entity was larger than limits
-    LENGTH_REQUIRED = 411, //Content-Length missing (for POST) 
+    PAYLOAD_TOO_LARGE  = 413 // request entity was larger than limits 
     // REQUEST_NOT_FOUND = 404,       // Not Found
 };
 
@@ -63,21 +74,8 @@ class Body {
         bool is_done = false;
         size_t current_chunk_size;
         bool reading_chunk_size = true;
-        void append(const std::string& new_data) 
-        {
-            data += new_data;
-        }
-        void reset() 
-        {
-            data.clear();
-            raw_body.clear();
-            expected_size = 0;
-            chunked = false;
-            is_done = false;
-            current_chunk_size = 0;
-            reading_chunk_size = true;
-        }
-
+        void append(const std::string& new_data);
+        void reset();
 };
 
 
@@ -86,18 +84,16 @@ class HandleReq
 {
     public:
         // req line
-        Header header;
-        Body body;
         std::string method;
         std::string uri;
         std::string http_v;
         std::string buffer;
-
+        //Header
+        Header header;
         std::map<std::string,std::string> map_header;
+        //Body
+        Body body;
         std::map<std::string,std::string> body_map;
-        // Headers
-        // std::map<std::string,std::string> Header;
-        // Body
         size_t content_length;
         std::string content_type;
         std::string transfer_encoding;
@@ -109,44 +105,44 @@ class Client
 {
     public:
         Client();
-        // ServerCo config;
         ServerCo config;
-        std::vector<Location> locations;
         long long client_max_body_size;
-        bool is_cgi = false;
         std::vector<std::string> allowed_methods;
+        // std::vector<Location> locations;
         HandleReq Hreq;
         // HandleRes Hres;
-        std::string read_buffer;
-        std::string write_buffer;
-        bool request_received;
-        bool response_sent;
         std::string file_path;
-        int client_fd;
-        bool is_cgi_request();
 
-        RequestParseStatus read_from_fd(int client_fd, size_t max_body_size);
-        bool write_to_fd(int client_fd);
+        // cgi 
+        bool is_cgi_request();
+        void    run_cgi();
+        int location_idx;
+        bool cgi_bin;
+        std::map<std::string , std::string> env_map;
+        std::map<std::string , std::string> map_ext;
+        std::string extension;
+        std::string script_file;
+        bool is_cgi;
+
+        //request 
+        bool request_received;
+        std::string read_buffer;
+        RequestParseStatus read_from_fd(int client_fd, long long max_body_size);
         std::string trim(std::string str);
         std::vector<std::string> split( std::string& s, std::string& delimiter);
         bool check_methods();
         void test_chunked_parsing();
         void handle_chunked_body(size_t max_body_size);
         void reset_for_next_request();
-        // ~Client();
+        
+        //response 
+        std::string write_buffer;
+        bool response_sent;
         std::string response_buffer;
+        bool write_to_fd(int client_fd);
         bool response_ready;
-        size_t status_code;       
-        void prepare_response() 
-        {
-            response_buffer =
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Length: 13\r\n"
-                "Connection: keep-alive\r\n"
-                "\r\n"
-                "Hello, world!";
-            response_ready = true;
-        }
+        int client_fd;
+        void prepare_response();
 
         // methods
         bool isGET;
@@ -154,8 +150,11 @@ class Client
         bool isDELETE;
         void getMethod();
         void deleteMethod();
+        std::string ft_content_type(const std::string& full_path);
+
         //stats
         RequestParseStatus status;
+        size_t status_code;       
 
 };
 

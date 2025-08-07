@@ -46,8 +46,7 @@ void start_server(std::vector<ServerCo>& configs)
     {
         try {
             servers.push_back(Server(configs[i]));
-        } catch (const std::exception& e) 
-        {
+        } catch (const std::exception& e) {
             std::cerr << "Server init failed: " << e.what() << std::endl;
         }
     }
@@ -58,7 +57,7 @@ void start_server(std::vector<ServerCo>& configs)
     for (size_t i = 0; i < servers.size(); ++i)
     {
         struct epoll_event ev;
-        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        ev.events = EPOLLIN | EPOLLRDHUP;
         ev.data.fd = servers[i].server_fd;
 
         if (epoll_ctl(global_epoll, EPOLL_CTL_ADD, servers[i].server_fd, &ev) == -1)
@@ -96,10 +95,8 @@ void start_server(std::vector<ServerCo>& configs)
                     std::cout << "***" << std::endl;
                     // target_server->
                     client = servers[j].sock_map[fd];
-                    
-                    client->config = servers[j].config;
-                    //
                     // client->locations = target_server->config.locations;
+                    client->config = servers[j].config;
                     // client->allowed_methods = target_server->config.locations[j].allowed_methods;
                     break;
                 }
@@ -120,9 +117,9 @@ void start_server(std::vector<ServerCo>& configs)
                 fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 Client* new_client = new Client;
                 target_server->sock_map[client_fd] = new_client;
-                // new_client->client_fd = client_fd;
+
                 struct epoll_event ev;
-                ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+                ev.events = EPOLLIN | EPOLLRDHUP;
                 ev.data.fd = client_fd;
                 if (epoll_ctl(global_epoll, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
                     perror("epoll_ctl ADD client");
@@ -150,7 +147,7 @@ void start_server(std::vector<ServerCo>& configs)
                     //     std::cout << "allowed method = " << *it << std::endl;
                     // }
                     // target_server->allowed_methods
-                    client->client_fd = fd;
+                    
                     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
                     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
                     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
@@ -190,7 +187,7 @@ void start_server(std::vector<ServerCo>& configs)
                 {
                     client->prepare_response();
                     struct epoll_event ev;
-                    ev.events = EPOLLOUT | EPOLLET | EPOLLRDHUP;
+                    ev.events = EPOLLOUT | EPOLLRDHUP;
                     ev.data.fd = fd;
                     if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
                     {
@@ -227,7 +224,7 @@ void start_server(std::vector<ServerCo>& configs)
                     {
                         client->reset_for_next_request();
                         struct epoll_event ev;
-                        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+                        ev.events = EPOLLIN | EPOLLRDHUP;
                         ev.data.fd = fd;
                         if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
                         {
