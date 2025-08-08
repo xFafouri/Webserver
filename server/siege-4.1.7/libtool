@@ -44,7 +44,7 @@ available_tags=" CXX"
 
 # ### BEGIN LIBTOOL CONFIG
 
-# Libtool was configured on host fafouri:
+# Libtool was configured on host c3r8p3.1337.ma:
 
 # Shell to use when invoking shell scripts.
 SHELL="/bin/bash"
@@ -331,7 +331,7 @@ link_all_deplibs=unknown
 sys_lib_search_path_spec=`echo "/lib64 /usr/lib64 /usr/local/lib64" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
 
 # Run-time system search path for libraries
-sys_lib_dlsearch_path_spec="/lib64 /usr/lib64 /usr/lib/x86_64-linux-gnu/libfakeroot /usr/local/lib /usr/local/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu "
+sys_lib_dlsearch_path_spec="/lib64 /usr/lib64 /usr/lib/x86_64-linux-gnu/libfakeroot /usr/local/lib /usr/local/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu /lib32 /usr/lib32 "
 
 # Fix the shell variable $srcfile for the compiler.
 fix_srcfile_path=""
@@ -7266,7 +7266,7 @@ disable_libs=static
 # End:
 # ### BEGIN LIBTOOL TAG CONFIG: CXX
 
-# Libtool was configured on host fafouri:
+# Libtool was configured on host c3r8p3.1337.ma:
 
 # Shell to use when invoking shell scripts.
 SHELL="/bin/bash"
@@ -7451,11 +7451,11 @@ striplib="strip --strip-unneeded"
 
 # Dependencies to place before the objects being linked to create a
 # shared library.
-predep_objects=`echo "/usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
+predep_objects=`echo "/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/12/crtbeginS.o" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
 
 # Dependencies to place after the objects being linked to create a
 # shared library.
-postdep_objects=`echo "/usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crtn.o" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
+postdep_objects=`echo "/usr/lib/gcc/x86_64-linux-gnu/12/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu/crtn.o" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
 
 # Dependencies to place before the objects being linked to create a
 # shared library.
@@ -7467,7 +7467,7 @@ postdeps="-lstdc++ -lm -lgcc_s -lc -lgcc_s"
 
 # The library search path used internally by the compiler when linking
 # a shared library.
-compiler_lib_search_path=`echo "-L/usr/lib/gcc/x86_64-linux-gnu/13 -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/13/../../.." | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
+compiler_lib_search_path=`echo "-L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/12/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/12/../../.." | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
 
 # Method to check whether dependent libraries are shared objects.
 deplibs_check_method="pass_all"
@@ -7550,7 +7550,7 @@ link_all_deplibs=unknown
 sys_lib_search_path_spec=`echo "/lib64 /usr/lib64 /usr/local/lib64" | $SED -e "s@${gcc_dir}@\${gcc_dir}@g;s@${gcc_ver}@\${gcc_ver}@g"`
 
 # Run-time system search path for libraries
-sys_lib_dlsearch_path_spec="/lib64 /usr/lib64 /usr/lib/x86_64-linux-gnu/libfakeroot /usr/local/lib /usr/local/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu "
+sys_lib_dlsearch_path_spec="/lib64 /usr/lib64 /usr/lib/x86_64-linux-gnu/libfakeroot /usr/local/lib /usr/local/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu /lib32 /usr/lib32 "
 
 # Fix the shell variable $srcfile for the compiler.
 fix_srcfile_path=""
