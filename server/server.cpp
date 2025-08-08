@@ -251,12 +251,13 @@ std::string generate_temp_file_path()
 
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
-    char recv_buffer[4096];
+    char recv_buffer[8192];
     // 
     this->client_fd = client_fd;
     while (true)
     {
         ssize_t n = recv(client_fd, recv_buffer, sizeof(recv_buffer),0);
+        std::cout << "n = " << n << std::endl;
         if (n < 0)
         {
             break;

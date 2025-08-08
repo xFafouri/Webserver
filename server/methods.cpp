@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include <cstddef>
 
 void Client::getMethod()
 {
@@ -115,7 +116,14 @@ void Client::getMethod()
         response += "Content-Type: " + content_type + "\r\n";
         response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
         response += body;
-        send(client_fd, response.c_str(), response.size(), 0);
+        std::cout << "BODY SIZE = " << body.size() << std::endl;
+        // std::cout << "the return of send () === " << read << std::endl; 
+        size_t total = 0;
+        while (total < body.size())
+        {
+            size_t read = send(client_fd, response.c_str(), response.size(), 0);
+            total += read;
+        }
         return;
     }
     else
