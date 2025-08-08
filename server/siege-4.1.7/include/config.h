@@ -173,7 +173,7 @@
 #define HAVE_UNISTD_H 1
 
 /* Discovered ZLIB for gzip/compress encoding */
-/* #undef HAVE_ZLIB */
+#define HAVE_ZLIB 1
 
 /* Name of package */
 #define PACKAGE "siege"
