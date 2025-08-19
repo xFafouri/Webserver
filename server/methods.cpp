@@ -17,13 +17,16 @@ void Client::getMethod()
     std::string response;
     if (!matchedLocation)
     {
-        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        std::cerr << "dkhl hna" << std::endl;
+        response = "HTTP/1.1 404 Not Found\r\n\r\n\r\n";
+        response+= "<center><h1> ERROR 404</h1> <hr> <p>WebServer/1.1</p></center>";
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
 
     std::string location_path = matchedLocation->path;
     std::string relative_uri = Hreq.uri.substr(location_path.length());
+    std::cout << "relative path ==" << relative_uri << std::endl;
 
     if (!relative_uri.empty() && relative_uri[0] == '/')
         relative_uri.erase(0, 1);
