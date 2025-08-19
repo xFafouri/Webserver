@@ -23,18 +23,25 @@ void Client::getMethod()
     }
 
     std::string location_path = matchedLocation->path;
+    std::cout << "location path == " << location_path << std::endl;
     std::string relative_uri = Hreq.uri.substr(location_path.length());
+    std::cout << "relative uri == " << relative_uri << std::endl;
 
     if (!relative_uri.empty() && relative_uri[0] == '/')
         relative_uri.erase(0, 1);
 
-    std::string full_dir_path = matchedLocation->root + location_path;
+    std::string full_dir_path = matchedLocation->root;
+    if (full_dir_path.back() == '/')
+        full_dir_path.pop_back();
+    std::cout << "full_dir_path check / == " << full_dir_path.back() << std::endl;
+    std::cout << "full dir path == " << full_dir_path << std::endl;
     if (!full_dir_path.empty() && full_dir_path.back() == '/')
         full_dir_path.pop_back(); // avoid double slashes
 
     std::string full_path = full_dir_path;
     if (!relative_uri.empty())
         full_path += "/" + relative_uri;
+    std::cout << "full path === " << full_path << std::endl;
 
     struct stat st;
     if (stat(full_path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
