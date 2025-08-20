@@ -40,6 +40,7 @@ Server::Server(const ServerCo& conf) : config(conf)
 
 Client::Client()
 {
+    send_offset = 0;
     cgi_bin = false;
     request_received = false;
     response_sent = false;
@@ -106,6 +107,7 @@ std::vector<std::string> spliting( std::string& s, std::string& delimiter)
 
 void Client::reset_for_next_request() 
 {
+    send_offset = 0;
     std::cout << "@@@@ Resetting client state for next request\n";
     Hreq.header.parsed = false;
     Hreq.header.method.clear();
@@ -251,7 +253,7 @@ std::string generate_temp_file_path()
 
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
-    char recv_buffer[4096];
+    char recv_buffer[8192];
     // 
     this->client_fd = client_fd;
     while (true)
