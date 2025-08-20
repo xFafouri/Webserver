@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+import sys
+import os
 
-print("Content-Type: video/mp4")
-print("Content-Length: 583023")  # exact size of the file in bytes
-print()  # this blank line is crucial
+file_path = "/home/hfafouri/Desktop/webserver/cgi-bin/video_long.mp4"
 
-with open("/home/hfafouri/Desktop/webserver/cgi-bin/video_short.mp4", "rb") as f:
-    ie
+# Get exact file size
+file_size = os.path.getsize(file_path)
+
+sys.stdout.write(f"Content-Type: video/mp4\r\n")
+sys.stdout.write(f"Content-Length: {file_size}\r\n")
+sys.stdout.write("\r\n")  # End of headers
+
+with open(file_path, "rb") as f:
     sys.stdout.buffer.write(f.read())
