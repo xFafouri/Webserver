@@ -59,12 +59,12 @@
 <body>
 	<div class="container">
 		<h2>Create file.txt on the server</h2>
-		<form action="./cgi-bin/create_file.py" method="post">
+		<form action="/create_file" method="post" enctype="multipart/form-data">
 			<label for="filename">Nom du fichier :</label>
-			<input type="text" id="filename" name="filename" required>
+			<input type="text" id="filename" filename="filename" required>
 			<br>
 			<label for="content">Contenu du fichier :</label>
-			<textarea id="content" name="content" rows="2" cols="50" required></textarea>
+			<textarea id="content" filename="content" rows="2" cols="50" required></textarea>
 			<br>
 			<input class="button" type="submit" value="Create file">
 		</form>

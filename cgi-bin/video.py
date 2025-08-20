@@ -2,7 +2,7 @@
 import sys
 import os
 
-file_path = "/home/hfafouri/Desktop/webserver/cgi-bin/video_long.mp4"
+file_path = "/home/hfafouri/Desktop/webserver20/cgi-bin/video.mp4"
 
 # Get exact file size
 file_size = os.path.getsize(file_path)
