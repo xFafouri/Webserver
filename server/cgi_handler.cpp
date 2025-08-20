@@ -160,10 +160,11 @@ void    Client::run_cgi()
 
     std::stringstream response;
     response << "HTTP/1.1 200 OK\r\n";
-    // response << "Content-Type: video/mp4\r\n";
-    // std::cout << "BODY SIZE = " << body.size()  <<  std::endl;
-    // response << "Content-Length: " << body.size() << "\r\n";
-    // response << "\r\n";
+    response << "Content-Type: video/mp4\r\n";
+    // response << "Content-Type: " << ft_content_type(script_path)
+    std::cout << "BODY SIZE = " << body.size()  <<  std::endl;
+    response << "Content-Length: " << body.size() << "\r\n";
+    response << "\r\n";
     response << body;
 
     response_buffer = response.str();

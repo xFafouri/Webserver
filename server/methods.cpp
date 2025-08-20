@@ -1,4 +1,6 @@
 #include "server.hpp"
+#include <cstddef>
+#include <sys/types.h>
 
 void Client::getMethod()
 {
@@ -111,11 +113,50 @@ void Client::getMethod()
         ss << file.rdbuf();
         std::string body = ss.str();
         std::string content_type = ft_content_type(full_path);
-        response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: " + content_type + "\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
-        response += body;
-        send(client_fd, response.c_str(), response.size(), 0);
+        response_buffer = "HTTP/1.1 200 OK\r\n";
+        response_buffer += "Content-Type: " + content_type + "\r\n";
+        response_buffer += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+        // ssize_t header_size = response_buffer.size ();
+        // ssize_t total = 0;
+        response_buffer += body;
+        // ssize_t chunk_size = 8192;
+        // ssize_t remaining = response_buffer.size() + header_size - send_offset;
+        // std::cout << "remaining = " << remaining << std::endl;
+        // if (remaining == 0) 
+        // {
+        //     // Done sending, close if needed
+        //     // close(client_fd);
+        //     return;
+        // }
+
+        // size_t to_send = std::min(chunk_size, remaining);
+        // // ssize_t n = send(client_fd, response_buffer.data() + send_offset, to_send, 0);
+        // std::cout << "send ====>" << n << std::endl;
+        // if (n > 0) 
+        // {
+        //     send_offset += n;
+        // }
+        // else if (n < 0 && (errno != EWOULDBLOCK && errno != EAGAIN)) 
+        // {
+
+        //     // Error: close connection
+        //     // close(client_fd);
+        //     return ;
+        // }
+        // while (true)
+        // {
+        //     ssize_t n = send(client_fd, response.c_str(), response.size(), 0);
+        //     std::cout << "N =====> = " << n << std::endl;
+        //     if (n <= 0)
+        //         return ;
+        //     total += n;
+        //     if (total >= body.size() + header_size)
+        //     {
+        //         std::cout << "total = " << total << std::endl;
+        //         std::cout << body.size() << std::endl;
+        //     break;
+        //     }
+        // }
         return;
     }
     else

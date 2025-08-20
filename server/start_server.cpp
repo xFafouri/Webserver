@@ -200,22 +200,9 @@ void start_server(std::vector<ServerCo>& configs)
             // handle write
             if (events[i].events & EPOLLOUT)
             {
-                bool write_complete = false;
-                bool connection_ok = true;
+                bool write_complete = client->write_to_fd(fd);
 
-                while (!write_complete)
-                {
-                    write_complete = client->write_to_fd(fd);
-                    if (!write_complete) 
-                    {
-                        connection_ok = false;
-                        break;
-                    }
-                }
-
-                if (!connection_ok)
-                    cleanup_connection(*target_server, fd, true);
-                else if (write_complete)
+                if (write_complete)
                 {
                     client->Hreq.header.map_header["Connection"] = "close";
                     if (client->Hreq.header.map_header["Connection"] == "close")
@@ -234,6 +221,7 @@ void start_server(std::vector<ServerCo>& configs)
                     }
                 }
             }
+
         }
     }
 }
