@@ -62,10 +62,10 @@ void Client::getMethod()
     std::string full_dir_path = matchedLocation->root;
     if (full_dir_path.back() == '/')
         full_dir_path.pop_back();
-    std::cout << "full_dir_path check / == " << full_dir_path.back() << std::endl;
+    std::cout << "full_dir_path check  == " << full_dir_path.back() << std::endl;
     std::cout << "full dir path == " << full_dir_path << std::endl;
-    if (!full_dir_path.empty() && full_dir_path.back() == '/')
-        full_dir_path.pop_back(); // avoid double slashes
+    // if (!full_dir_path.empty() && full_dir_path.back() == '/')
+    //     full_dir_path.pop_back(); // avoid double slashes
 
     std::string full_path = full_dir_path;
     if (!relative_uri.empty())
