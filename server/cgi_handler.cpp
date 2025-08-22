@@ -1,5 +1,7 @@
 
 #include "server.hpp"
+#include <cstddef>
+#include <sys/types.h>
 
 bool Client::is_cgi_request() 
 {
@@ -64,6 +66,8 @@ bool Client::is_cgi_request()
     return (ext == ".py" || ext == ".php" || ext == ".pl");
 }
 
+
+
 void    Client::run_cgi()
 {
     std::string query_string;
@@ -107,6 +111,7 @@ void    Client::run_cgi()
         i++;
     }
     envp[i] = NULL;
+    
     i = 0;
     while(envp[i])
     {
@@ -125,61 +130,81 @@ void    Client::run_cgi()
     int out_pipe[2];
     pipe(in_pipe);
     pipe(out_pipe);
-    // pipe(fd);
 
     int pid = fork();
 
     if (pid == 0)
     {
-    //    fd[1] << Hreq.body._body;
         dup2(in_pipe[0], STDIN_FILENO);
         dup2(out_pipe[1], STDOUT_FILENO);
 
         close(in_pipe[1]);
         close(out_pipe[0]);
 
-        // char **envp = env_map;
-        execve(argv[0],argv,envp);
-        exit(1);
+        execve(argv[0], argv, envp);
     }
 
-    close (in_pipe[0]);
-    close (out_pipe[1]);
+    close(in_pipe[0]);
+    close(out_pipe[1]);
+    
     if (Hreq.method == "POST") 
     {
         write(in_pipe[1], Hreq.body._body.c_str(), Hreq.body._body.size());
     }
     close(in_pipe[1]);
-    // std::cout << "prepare response" << std::endl;
+    
     char buffer[8192];
     ssize_t n;
-    std::string body;
-
+    std::string cgi_output;
+    
     while ((n = read(out_pipe[0], buffer, sizeof(buffer))) > 0)
-        body.append(buffer, n);
+        cgi_output.append(buffer, n);
 
-    std::stringstream response;
-    response << "HTTP/1.1 200 OK\r\n";
-    response << "Content-Type: video/mp4\r\n";
-    // response << "Content-Type: " << ft_content_type(script_path)
-    std::cout << "BODY SIZE = " << body.size()  <<  std::endl;
-    response << "Content-Length: " << body.size() << "\r\n";
-    response << "\r\n";
-    response << body;
-
-    response_buffer = response.str();
-    response.clear();
-    body.clear();
-
-    // write(client_fd, response.str().c_str(), response.str().size());
     close(out_pipe[0]);
-
-    for (int j = 0; envp[j]; ++j)
-        free(envp[j]);
-    delete[] envp;
-
     waitpid(pid, NULL, 0);
+    
+    std::stringstream response;
+    size_t header_end = cgi_output.find("\r\n\r\n");
+    if (header_end == std::string::npos) 
+    {
+        header_end = cgi_output.find("\n\n"); 
+    }
 
-    // dup2(fd[0], STDIN_FILENO);
-    // std::cout << "response_buffer = " << response_buffer << std::endl;
+    std::string headers;
+    std::string body;
+    if (header_end != std::string::npos)
+    {
+        headers = cgi_output.substr(0, header_end);
+        body = cgi_output.substr(header_end + 2);
+    } 
+    else 
+    {
+        body = cgi_output;
+    }
+
+    std::string content_type = "text/html";
+    std::istringstream hstream(headers);
+    std::string line;
+    while (std::getline(hstream, line)) 
+    {
+        size_t n = line.find("Content-Type:");
+        if (line.find("Content-Type:") != std::string::npos) 
+        {
+            content_type = line.substr(n + 13);
+            while (!content_type.empty() && (content_type[0] == ' ' || content_type[0] == '\t'))
+                content_type.erase(0, 1);
+            std::cout << "content_type1 = " << content_type << std::endl;
+        }
+    }
+
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Type: " << content_type << "\r\n";
+    response << "Content-Length: " << cgi_output.size() << "\r\n";
+    response << "\r\n";
+    response << cgi_output;
+    std::cout << "headers = " << headers << std::endl;
+    std::cout << "body = " << body << std::endl;
+    
+    response_buffer = response.str();
+    // std::cout << "response_buffer  = " << response_buffer << std::endl;
 }

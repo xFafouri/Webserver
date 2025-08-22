@@ -112,6 +112,7 @@ void Client::getMethod()
         std::ostringstream ss;
         ss << file.rdbuf();
         std::string body = ss.str();
+        
         std::string content_type = ft_content_type(full_path);
         response_buffer = "HTTP/1.1 200 OK\r\n";
         response_buffer += "Content-Type: " + content_type + "\r\n";
