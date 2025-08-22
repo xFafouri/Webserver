@@ -2,14 +2,26 @@
 import sys
 import os
 
+# Path to the video file you want to serve
 file_path = "/home/hfafouri/Desktop/webserver20/cgi-bin/video.mp4"
 
-# Get exact file size
-file_size = os.path.getsize(file_path)
+try:
+    # Get size of the file
+    file_size = os.path.getsize(file_path)
 
-sys.stdout.write(f"Content-Type: video/mp4\r\n")
-sys.stdout.write(f"Content-Length: {file_size}\r\n")
-sys.stdout.write("\r\n")  # End of headers
+    # Write headers
+    sys.stdout.write("Content-Type: video/mp4\r\n")
+    sys.stdout.write(f"Content-Length: {file_size}\r\n")
+    sys.stdout.write("\r\n")  # End of headers
 
-with open(file_path, "rb") as f:
-    sys.stdout.buffer.write(f.read())
+    # Stream the video binary
+    with open(file_path, "rb") as f:
+        sys.stdout.buffer.write(f.read())
+
+except Exception as e:
+    # In case of error, return a plain text error message
+    error_message = f"Error: {str(e)}\n"
+    sys.stdout.write("Content-Type: text/plain\r\n")
+    sys.stdout.write(f"Content-Length: {len(error_message)}\r\n")
+    sys.stdout.write("\r\n")
+    sys.stdout.write(error_message)
