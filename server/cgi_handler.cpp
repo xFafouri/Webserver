@@ -164,10 +164,13 @@ void    Client::run_cgi()
     waitpid(pid, NULL, 0);
     
     std::stringstream response;
+
     size_t header_end = cgi_output.find("\r\n\r\n");
+    size_t sep_len = 4;
     if (header_end == std::string::npos) 
     {
-        header_end = cgi_output.find("\n\n"); 
+        header_end = cgi_output.find("\n\n");
+        sep_len = 2;
     }
 
     std::string headers;
@@ -175,7 +178,7 @@ void    Client::run_cgi()
     if (header_end != std::string::npos)
     {
         headers = cgi_output.substr(0, header_end);
-        body = cgi_output.substr(header_end + 2);
+        body = cgi_output.substr(header_end + sep_len); 
     } 
     else 
     {
@@ -202,9 +205,13 @@ void    Client::run_cgi()
     response << "Content-Length: " << cgi_output.size() << "\r\n";
     response << "\r\n";
     response << cgi_output;
-    std::cout << "headers = " << headers << std::endl;
-    std::cout << "body = " << body << std::endl;
-    
+
+
+    // std::cout << "headers = " << headers << std::endl;
+    // std::cout << "body = " << body << std::endl;
+    // std::cout << "cgi_output = " <<  cgi_output << std::endl;
+
     response_buffer = response.str();
-    // std::cout << "response_buffer  = " << response_buffer << std::endl;
+    // std::cout << "response_buffer = " <<  response_buffer << std::endl; 
+
 }
