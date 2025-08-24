@@ -1,11 +1,6 @@
 #include "server.hpp"
-<<<<<<< HEAD
 #include <cstddef>
 #include <sys/types.h>
-=======
-
-
->>>>>>> main
 
 std::string normalize_path(const std::string &path)
 {
@@ -31,13 +26,11 @@ std::string normalize_path(const std::string &path)
     return result;
 }
 
-<<<<<<< HEAD
-void Client::getMethod()
-{
-    const Location* matchedLocation = NULL;
-    Hreq.uri = normalize_path(Hreq.uri);
-    std::cout << "hreq uri == >> "<< Hreq.uri << std::endl;
-=======
+// void Client::getMethod()
+// {
+//     const Location* matchedLocation = NULL;
+//     Hreq.uri = normalize_path(Hreq.uri);
+//     std::cout << "hreq uri == >> "<< Hreq.uri << std::endl;
 std::string loadErrorPage(const std::string& path) {
     std::ifstream file(path.c_str());
     if (!file.is_open()) {
@@ -108,13 +101,11 @@ void Client::getMethod()
     const Location* matchedLocation = nullptr;
     Hreq.uri = normalize_path(Hreq.uri);
 
->>>>>>> main
     for (size_t i = 0; i < config.locations.size(); ++i)
     {
         if (Hreq.uri.find(config.locations[i].path) == 0)
         {
             if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
-<<<<<<< HEAD
             {
                 matchedLocation = &config.locations[i];
             }
@@ -129,32 +120,18 @@ void Client::getMethod()
         response = "HTTP/1.1 404 Not Found\r\n\r\n\r\n";
         response+= "<center><h1> ERROR 404</h1> <hr> <p>WebServer/1.1</p></center>";
         send(client_fd, response.c_str(), response.size(), 0);
-=======
-                matchedLocation = &config.locations[i];
-        }
-    }
-    
-    if (!matchedLocation)
-    {
-        sendError(404);
->>>>>>> main
         return;
     }
 
     std::string location_path = matchedLocation->path;
-<<<<<<< HEAD
     std::cout << "location path == " << location_path << std::endl;
     std::string relative_uri = Hreq.uri.substr(location_path.length());
     std::cout << "relative path ==" << relative_uri << std::endl;
 
-=======
-    std::string relative_uri = Hreq.uri.substr(location_path.length());
->>>>>>> main
     if (!relative_uri.empty() && relative_uri[0] == '/')
         relative_uri.erase(0, 1);
 
     std::string full_dir_path = matchedLocation->root;
-<<<<<<< HEAD
     if (full_dir_path.back() == '/')
         full_dir_path.pop_back();
     std::cout << "full_dir_path check / == " << full_dir_path.back() << std::endl;
@@ -176,40 +153,15 @@ void Client::getMethod()
         {
             std::string redirect_uri = Hreq.uri + "/";
             response = "HTTP/1.1 301 Moved Permanently\r\n";
-=======
-    if (!full_dir_path.empty() && full_dir_path.back() == '/')
-        full_dir_path.pop_back();
-
-    std::string full_path = full_dir_path + (relative_uri.empty() ? "" : "/" + relative_uri);
-
-    struct stat st;
-    if (stat(full_path.c_str(), &st) != 0)
-    {
-        sendError(404);
-        return;
-    }
-
-    if (S_ISDIR(st.st_mode))
-    {
-        if (Hreq.uri.back() != '/')
-        {
-            std::string redirect_uri = Hreq.uri + "/";
-            std::string response = "HTTP/1.1 301 Moved Permanently\r\n";
->>>>>>> main
             response += "Location: " + redirect_uri + "\r\n";
             response += "Content-Length: 0\r\n\r\n";
             send(client_fd, response.c_str(), response.size(), 0);
             return;
         }
 
-<<<<<<< HEAD
         std::string index_path;
         bool foundIndex = false;
 
-=======
-        bool foundIndex = false;
-        std::string index_path;
->>>>>>> main
         for (size_t i = 0; i < matchedLocation->index_files.size(); ++i)
         {
             index_path = full_path + "/" + matchedLocation->index_files[i];
@@ -222,7 +174,6 @@ void Client::getMethod()
 
         if (foundIndex)
         {
-<<<<<<< HEAD
             std::ifstream file(index_path.c_str());
             if (!file)
             {
@@ -236,21 +187,6 @@ void Client::getMethod()
             std::string body = ss.str();
             response = "HTTP/1.1 200 OK\r\n";
             response += "Content-Type: text/html\r\n";
-=======
-            std::ifstream file(index_path);
-            if (!file)
-            {
-                sendError(500);
-                return;
-            }
-            std::ostringstream ss;
-            ss << file.rdbuf();
-            std::string body = ss.str();
-            std::string content_type = ft_content_type(index_path);
-
-            std::string response = "HTTP/1.1 200 OK\r\n";
-            response += "Content-Type: " + content_type + "\r\n";
->>>>>>> main
             response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
             response += body;
             send(client_fd, response.c_str(), response.size(), 0);
@@ -258,18 +194,13 @@ void Client::getMethod()
         }
         else if (matchedLocation->autoindex)
         {
-<<<<<<< HEAD
             response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-=======
-            std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
->>>>>>> main
             response += "<html><body><h1>Autoindex not implemented yet</h1></body></html>";
             send(client_fd, response.c_str(), response.size(), 0);
             return;
         }
         else
         {
-<<<<<<< HEAD
             response = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
             send(client_fd, response.c_str(), response.size(), 0);
             return;
@@ -285,38 +216,17 @@ void Client::getMethod()
             return;
         }
 
-=======
-            sendError(403);
-            return;
-        }
-    }
-
-    if (S_ISREG(st.st_mode))
-    {
-        std::ifstream file(full_path);
-        if (!file)
-        {
-            sendError(500);
-            return;
-        }
->>>>>>> main
         std::ostringstream ss;
         ss << file.rdbuf();
         std::string body = ss.str();
         std::string content_type = ft_content_type(full_path);
-<<<<<<< HEAD
-        response = "HTTP/1.1 200 OK\r\n";
-=======
-
-        std::string response = "HTTP/1.1 200 OK\r\n";
->>>>>>> main
-        response += "Content-Type: " + content_type + "\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
-        response += body;
-        send(client_fd, response.c_str(), response.size(), 0);
+        response_buffer = "HTTP/1.1 200 OK\r\n";
+        response_buffer += "Content-Type: " + content_type + "\r\n";
+        response_buffer += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+        response_buffer += body;
+        // send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
-<<<<<<< HEAD
     else
     {
         response = "HTTP/1.1 404 Not Found\r\n";
@@ -342,13 +252,6 @@ void Client::getMethod()
 
 
 
-=======
-
-    sendError(404);
-}
-
-
->>>>>>> main
 void Client::deleteMethod()
 {
 

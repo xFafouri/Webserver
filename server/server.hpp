@@ -144,16 +144,14 @@ class Client
         bool response_ready;
         int client_fd;
         void prepare_response();
-<<<<<<< HEAD
         ssize_t send_offset;
         bool header_sent;
         ssize_t header_size;
         ssize_t total;
         ssize_t remaining;
         ssize_t send_len;
-=======
         void sendError(int code);
->>>>>>> main
+
 
         // methods
         bool isGET;
