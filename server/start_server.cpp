@@ -149,6 +149,7 @@ void start_server(std::vector<ServerCo>& configs)
                     // target_server->allowed_methods
                     
                     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
+                    
                     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
                     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
                     std::cout << "Reading chunk size: " << client->Hreq.body.reading_chunk_size << "\n";
@@ -200,22 +201,9 @@ void start_server(std::vector<ServerCo>& configs)
             // handle write
             if (events[i].events & EPOLLOUT)
             {
-                bool write_complete = false;
-                bool connection_ok = true;
+                bool write_complete = client->write_to_fd(fd);
 
-                while (!write_complete)
-                {
-                    write_complete = client->write_to_fd(fd);
-                    if (!write_complete) 
-                    {
-                        connection_ok = false;
-                        break;
-                    }
-                }
-
-                if (!connection_ok)
-                    cleanup_connection(*target_server, fd, true);
-                else if (write_complete)
+                if (write_complete)
                 {
                     client->Hreq.header.map_header["Connection"] = "close";
                     if (client->Hreq.header.map_header["Connection"] == "close")
@@ -234,6 +222,7 @@ void start_server(std::vector<ServerCo>& configs)
                     }
                 }
             }
+
         }
     }
 }
