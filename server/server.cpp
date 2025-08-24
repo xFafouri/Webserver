@@ -40,10 +40,7 @@ Server::Server(const ServerCo& conf) : config(conf)
 
 Client::Client()
 {
-<<<<<<< HEAD
     send_offset = 0;
-=======
->>>>>>> main
     cgi_bin = false;
     request_received = false;
     response_sent = false;
@@ -233,15 +230,12 @@ std::string Client::ft_content_type(const std::string& full_path)
         return "text/csv";
     else if (full_path.find(".md") != std::string::npos)
         return "text/markdown";
-<<<<<<< HEAD
     else if (full_path.find(".py") != std::string::npos)
         return "application/x-python-code";
     else if (full_path.find(".php") != std::string::npos)
         return "application/x-php";   
     else if (full_path.find(".pl") != std::string::npos)
         return "text/html";  
-=======
->>>>>>> main
     else if (full_path.find(".yaml") != std::string::npos || full_path.find(".yml") != std::string::npos)
         return "application/x-yaml";
     else
@@ -265,25 +259,7 @@ std::string generate_temp_file_path()
 
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
-<<<<<<< HEAD
-    // std::stringstream response;
-    // std::cout << "herere" << std::endl;
-    // response << "HTTP/1.1 200 OK\r\n";
-    // // response << headers << "\r\n\r\n";
-    // // response << "Content-Type: video/mp4\r\n";
-    // response << "Content-Type: text/html\r\n";
-    // // std::cout << "script_file = "  << 
-    // // std::cout << ft_content_type(script_file)  << std::endl;
-    // // response << "Content-Type: " << ft_content_type(script_file) << "\r\n";
-    // response << "Content-Length: " << cgi_output.size() << "\r\n";
-    // response << "\r\n";
-    // response << cgi_output;
-    // response_buffer = response.str();
-
-    char recv_buffer[8192];
-=======
     char recv_buffer[4096];
->>>>>>> main
     // 
     this->client_fd = client_fd;
     while (true)
@@ -448,13 +424,8 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         }
         else if (Hreq.body.expected_size > 0)
         {
-<<<<<<< HEAD
-            // std::cout << "BUFFER = " << read_buffer << std::endl;
-            // std::cout << "BODY = " << Hreq.body._body << std::endl;
-=======
             std::cout << "BUFFER = " << read_buffer << std::endl;
             std::cout << "BODY = " << Hreq.body._body << std::endl;
->>>>>>> main
             std::cout << "Content_Type = " <<  Hreq.content_type << std::endl;
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
@@ -557,17 +528,11 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 part =  part.substr(pos + 4, end - 1);
                                 // std::cout << "Part = " << part;
                             }
-<<<<<<< HEAD
                             if (Hreq.method == "POST")
                             {
                                 std::string file_path = generate_temp_file_path();
                                 std::cout << "file_path = "  << file_path << std::endl;
 
-=======
-                            if (Hreq.method == "POST" && is_cgi == false)
-                            {
-                                std::string file_path = generate_temp_file_path();
->>>>>>> main
                                 std::ofstream outfile(file_path.c_str());
                                 // std::cout << "part = " << part << std::endl;
                                 if (outfile.is_open()) 
@@ -603,16 +568,10 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                     body_part = body_part.substr(0, boundary_end);
                                 }
                                 
-<<<<<<< HEAD
                                 if (Hreq.method == "POST")
                                 {
                                     file_path = generate_temp_file_path();
                                     std::cout << "file_path = "  << file_path << std::endl;
-=======
-                                if (Hreq.method == "POST" && is_cgi == false)
-                                {
-                                    file_path = generate_temp_file_path();
->>>>>>> main
                                     std::ofstream outfile(file_path.c_str());
                                     if (outfile.is_open()) 
                                     {
@@ -623,19 +582,11 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 else {
                                     body_part.clear();
                                 }
-<<<<<<< HEAD
                                 // std::cout << "content = " << body_part;
                             }
                         }
                     }
                         // std::cout << "body vector = " << *it << std::endl;
-=======
-                                std::cout << "content = " << body_part;
-                            }
-                        }
-                    }
-                        std::cout << "body vector = " << *it << std::endl;
->>>>>>> main
                         part.clear();
                     }
                     Hreq.body.chunk_done = true;
