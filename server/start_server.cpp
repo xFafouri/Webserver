@@ -147,8 +147,8 @@ void start_server(std::vector<ServerCo>& configs)
                     //     std::cout << "allowed method = " << *it << std::endl;
                     // }
                     // target_server->allowed_methods
-                    
                     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
+                    
                     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
                     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
                     std::cout << "Reading chunk size: " << client->Hreq.body.reading_chunk_size << "\n";
