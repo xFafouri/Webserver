@@ -143,6 +143,7 @@ class Client
         bool response_ready;
         int client_fd;
         void prepare_response();
+        void sendError(int code);
 
         // methods
         bool isGET;
