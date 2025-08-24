@@ -2,9 +2,35 @@
 #include <cstddef>
 #include <sys/types.h>
 
+std::string normalize_path(const std::string &path)
+{
+    std::string result;
+    bool check = false;
+    for (size_t i = 0;i <  path.size(); i++)
+    {
+        char c = path[i];
+        if (c == '/')
+        {
+            if (check == false)
+            {
+                result += c;
+                check = true;
+            }
+        }
+        else
+        {
+            result += c;
+            check = false;
+        }
+    }
+    return result;
+}
+
 void Client::getMethod()
 {
     const Location* matchedLocation = NULL;
+    Hreq.uri = normalize_path(Hreq.uri);
+    std::cout << "hreq uri == >> "<< Hreq.uri << std::endl;
     for (size_t i = 0; i < config.locations.size(); ++i)
     {
         if (Hreq.uri.find(config.locations[i].path) == 0)
@@ -16,31 +42,42 @@ void Client::getMethod()
         }
     }
 
+    std::cout << "matchedlocation == " << matchedLocation->path << std::endl;
     std::string response;
     if (!matchedLocation)
     {
-        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        std::cerr << "dkhl hna" << std::endl;
+        response = "HTTP/1.1 404 Not Found\r\n\r\n\r\n";
+        response+= "<center><h1> ERROR 404</h1> <hr> <p>WebServer/1.1</p></center>";
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
 
     std::string location_path = matchedLocation->path;
+    std::cout << "location path == " << location_path << std::endl;
     std::string relative_uri = Hreq.uri.substr(location_path.length());
+    std::cout << "relative path ==" << relative_uri << std::endl;
 
     if (!relative_uri.empty() && relative_uri[0] == '/')
         relative_uri.erase(0, 1);
 
-    std::string full_dir_path = matchedLocation->root + location_path;
+    std::string full_dir_path = matchedLocation->root;
+    if (full_dir_path.back() == '/')
+        full_dir_path.pop_back();
+    std::cout << "full_dir_path check / == " << full_dir_path.back() << std::endl;
+    std::cout << "full dir path == " << full_dir_path << std::endl;
     if (!full_dir_path.empty() && full_dir_path.back() == '/')
         full_dir_path.pop_back(); // avoid double slashes
 
     std::string full_path = full_dir_path;
     if (!relative_uri.empty())
         full_path += "/" + relative_uri;
+    std::cout << "full path === " << full_path << std::endl;
 
     struct stat st;
     if (stat(full_path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
     {
+        std::cout << "is a directory " << std::endl;
         // REDIRECT: If URI does not end with '/' but is a directory
         if (Hreq.uri.back() != '/')
         {
@@ -112,21 +149,37 @@ void Client::getMethod()
         std::ostringstream ss;
         ss << file.rdbuf();
         std::string body = ss.str();
-        
         std::string content_type = ft_content_type(full_path);
-        response_buffer = "HTTP/1.1 200 OK\r\n";
-        response_buffer += "Content-Type: " + content_type + "\r\n";
-        response_buffer += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
-        response_buffer += body;
+        response = "HTTP/1.1 200 OK\r\n";
+        response += "Content-Type: " + content_type + "\r\n";
+        response += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+        response += body;
+        send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
     else
     {
-        response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        response = "HTTP/1.1 404 Not Found\r\n";
+        response += "Content-Type: text/html\r\n";
+        response += "Content-Length: ";
+
+        std::string body = 
+        "<!DOCTYPE html>"
+        "<html>"
+        "<head><title>404 Not Found</title></head>"
+        "<body>"
+        "<center><h1>404 Not Found</h1></center>"
+        "<hr><center>webserv 'omar hamza'</center>"
+        "</body>"
+        "</html>";
+
+        response += std::to_string(body.size()) + "\r\n\r\n";
+        response += body;
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
 }
+
 
 
 void Client::deleteMethod()

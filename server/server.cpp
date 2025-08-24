@@ -608,7 +608,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                     filename.clear();
                     name.clear();
                     content.clear();
-                    // std::cout << "After content = " << content << std::endl;
+                    std::cout << "After content = " << content << std::endl;
                     boundary.clear();
                     body_vector.clear();
                     Hreq.body._body.clear();
