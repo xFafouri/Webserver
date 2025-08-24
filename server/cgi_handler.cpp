@@ -1,7 +1,10 @@
 
 #include "server.hpp"
+<<<<<<< HEAD
 #include <cstddef>
 #include <sys/types.h>
+=======
+>>>>>>> main
 
 bool Client::is_cgi_request() 
 {
@@ -66,8 +69,11 @@ bool Client::is_cgi_request()
     return (ext == ".py" || ext == ".php" || ext == ".pl");
 }
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> main
 void    Client::run_cgi()
 {
     std::string query_string;
@@ -111,7 +117,10 @@ void    Client::run_cgi()
         i++;
     }
     envp[i] = NULL;
+<<<<<<< HEAD
     
+=======
+>>>>>>> main
     i = 0;
     while(envp[i])
     {
@@ -130,28 +139,47 @@ void    Client::run_cgi()
     int out_pipe[2];
     pipe(in_pipe);
     pipe(out_pipe);
+<<<<<<< HEAD
+=======
+    // pipe(fd);
+>>>>>>> main
 
     int pid = fork();
 
     if (pid == 0)
     {
+<<<<<<< HEAD
+=======
+    //    fd[1] << Hreq.body._body;
+>>>>>>> main
         dup2(in_pipe[0], STDIN_FILENO);
         dup2(out_pipe[1], STDOUT_FILENO);
 
         close(in_pipe[1]);
         close(out_pipe[0]);
 
+<<<<<<< HEAD
         execve(argv[0], argv, envp);
     }
 
     close(in_pipe[0]);
     close(out_pipe[1]);
     
+=======
+        // char **envp = env_map;
+        execve(argv[0],argv,envp);
+        exit(1);
+    }
+
+    close (in_pipe[0]);
+    close (out_pipe[1]);
+>>>>>>> main
     if (Hreq.method == "POST") 
     {
         write(in_pipe[1], Hreq.body._body.c_str(), Hreq.body._body.size());
     }
     close(in_pipe[1]);
+<<<<<<< HEAD
     
     char buffer[8192];
     ssize_t n;
@@ -215,3 +243,37 @@ void    Client::run_cgi()
     // std::cout << "response_buffer = " <<  response_buffer << std::endl; 
 
 }
+=======
+    // std::cout << "prepare response" << std::endl;
+    char buffer[8192];
+    ssize_t n;
+    std::string body;
+
+    while ((n = read(out_pipe[0], buffer, sizeof(buffer))) > 0)
+        body.append(buffer, n);
+
+    std::stringstream response;
+    response << "HTTP/1.1 200 OK\r\n";
+    // response << "Content-Type: video/mp4\r\n";
+    // std::cout << "BODY SIZE = " << body.size()  <<  std::endl;
+    // response << "Content-Length: " << body.size() << "\r\n";
+    // response << "\r\n";
+    response << body;
+
+    response_buffer = response.str();
+    response.clear();
+    body.clear();
+
+    // write(client_fd, response.str().c_str(), response.str().size());
+    close(out_pipe[0]);
+
+    for (int j = 0; envp[j]; ++j)
+        free(envp[j]);
+    delete[] envp;
+
+    waitpid(pid, NULL, 0);
+
+    // dup2(fd[0], STDIN_FILENO);
+    // std::cout << "response_buffer = " << response_buffer << std::endl;
+}
+>>>>>>> main
