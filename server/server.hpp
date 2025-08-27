@@ -115,6 +115,7 @@ class Client
         
 
         // cgi 
+        bool is_cgi_script(const std::string &path);
         bool is_cgi_request();
         void    run_cgi();
         int location_idx;
@@ -160,6 +161,8 @@ class Client
         void getMethod();
         void deleteMethod();
         std::string ft_content_type(const std::string& full_path);
+        std::string normalize_path(const std::string &path);
+
 
         //stats
         RequestParseStatus status;

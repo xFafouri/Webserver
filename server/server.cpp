@@ -276,7 +276,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         read_buffer.append(recv_buffer, n);
         memset(recv_buffer, 0, sizeof(recv_buffer));
     }
-
+    std::cout << "read_buffer = " << read_buffer << std::endl;
     std::string boundary;
     if (!Hreq.header.parsed)
     {
@@ -328,8 +328,17 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         Hreq.header.parsed = true;
         if (is_cgi_request())
         {
-            std::cout << "IS CGI " << std::endl;
-            is_cgi = true;
+            if (is_cgi_script(script_file)) 
+            {
+                std::cout << "IS CGI " << std::endl;
+                is_cgi = true;
+            } 
+            else 
+            {
+                is_cgi = false;
+                map_ext.clear();
+                script_file.clear();
+            }
         }
         std::cout << "HERE" << std::endl;
         
@@ -424,8 +433,8 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         }
         else if (Hreq.body.expected_size > 0)
         {
-            std::cout << "BUFFER = " << read_buffer << std::endl;
-            std::cout << "BODY = " << Hreq.body._body << std::endl;
+            // std::cout << "BUFFER = " << read_buffer << std::endl;
+            // std::cout << "BODY = " << Hreq.body._body << std::endl;
             std::cout << "Content_Type = " <<  Hreq.content_type << std::endl;
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
@@ -464,7 +473,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 
                 while (std::getline(pair_stream, pair, '&'))
                 {
-                    // std::cout << "urlencoded3" << std::endl;
+                    std::cout << "urlencoded3" << std::endl;
                     // std::cout << "cout = " <<  pair << std::endl;
                     size_t equal_pos = pair.find('=');
                     if (equal_pos != std::string::npos)
@@ -518,7 +527,6 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                             if (end_quote != std::string::npos)
                             {
                                 filename = part.substr(name_pos, end_quote - name_pos);
-                                std::cout << "filename = " << filename << std::endl;
                             }
                             //find /r/n/r/n 
                             size_t pos = part.find("\r\n\r\n");
@@ -530,17 +538,18 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                             }
                             if (Hreq.method == "POST")
                             {
-                                std::string file_path = generate_temp_file_path();
-                                std::cout << "file_path = "  << file_path << std::endl;
-
+                                std::string file_path = filename;
+                                // std::string file_path = generate_temp_file_path();
                                 std::ofstream outfile(file_path.c_str());
                                 // std::cout << "part = " << part << std::endl;
                                 if (outfile.is_open()) 
                                 {
+                                    std::cout << "Filename = " << file_path << std::endl;
+                                    std::cout << "part = " << part << std::endl;
                                     outfile << part;
                                     outfile.close();
                                 }
-                            }
+                            }   
                         }
                         else 
                         {
@@ -570,13 +579,15 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 
                                 if (Hreq.method == "POST")
                                 {
-                                    file_path = generate_temp_file_path();
-                                    std::cout << "file_path = "  << file_path << std::endl;
-                                    std::ofstream outfile(file_path.c_str());
-                                    if (outfile.is_open()) 
+                                    
+                                    std::string file_path = generate_temp_file_path();
+                                    std::ofstream outfile1(file_path.c_str());
+                                    if (outfile1.is_open()) 
                                     {
-                                        outfile << body_part;
-                                        outfile.close();
+                                        std::cout << "File_path = "  << file_path << std::endl;
+                                        std::cout << "body_part = " << body_part << std::endl;
+                                        outfile1 << body_part;
+                                        outfile1.close();
                                     }
                                 }
                                 else {

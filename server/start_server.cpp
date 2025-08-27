@@ -167,7 +167,8 @@ void start_server(std::vector<ServerCo>& configs)
                         connection_ok = false;
                         break;
                     } 
-                    else if (client->status >= 400 && client->status < 600) {
+                    else if (client->status >= 400 && client->status < 600) 
+                    {
                         client->status_code = client->status;
                         request_complete = true;
                         break;
