@@ -34,7 +34,46 @@
 
 #include "../config_file/parser.hpp"
 
-
+// while (true)
+// {
+//     // std::vector<std::string>::iterator it = client->allowed_methods.begin();
+//     // for(; it != client->allowed_methods.end(); it++)
+//     // {
+//     //     std::cout << "allowed method = " << *it << std::endl;
+//     // }
+//     // target_server->allowed_methods
+    
+//     client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
+    
+//     std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
+//     std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
+//     std::cout << "Reading chunk size: " << client->Hreq.body.reading_chunk_size << "\n";
+//     std::cout << "STATUS = " << client->status << std::endl;
+//     if (client->status == PARSE_OK) 
+//     {
+//         request_complete = true;
+//         break;
+//     } 
+//     else if (client->status == PARSE_INCOMPLETE) 
+//     {
+//         break;
+//     } 
+//     else if (client->status == PARSE_CONNECTION_CLOSED) {
+//         connection_ok = false;
+//         break;
+//     } 
+//     else if (client->status >= 400 && client->status < 600) 
+//     {
+//         client->status_code = client->status;
+//         request_complete = true;
+//         break;
+//     } 
+//     else 
+//     {
+//         connection_ok = false;
+//         break;
+//     }
+// }
 class Header
 {
     public :
@@ -77,8 +116,6 @@ class Body {
         void append(const std::string& new_data);
         void reset();
 };
-
-
 
 class HandleReq 
 {

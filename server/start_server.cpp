@@ -139,45 +139,22 @@ void start_server(std::vector<ServerCo>& configs)
                 bool connection_ok = true;
                 bool request_complete = false;
 
-                while (true)
+                client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
+                std::cout << "status = " << client->status << std::endl;
+                if (client->status == PARSE_OK) 
                 {
-                    // std::vector<std::string>::iterator it = client->allowed_methods.begin();
-                    // for(; it != client->allowed_methods.end(); it++)
-                    // {
-                    //     std::cout << "allowed method = " << *it << std::endl;
-                    // }
-                    // target_server->allowed_methods
-                    
-                    client->status = client->read_from_fd(fd, target_server->config.client_max_body_size);
-                    
-                    std::cout << "Chunk size: " << client->Hreq.body.current_chunk_size << "\n";
-                    std::cout << "Buffer size: " << client->Hreq.body._body.size() << "\n";
-                    std::cout << "Reading chunk size: " << client->Hreq.body.reading_chunk_size << "\n";
-                    std::cout << "STATUS = " << client->status << std::endl;
-                    if (client->status == PARSE_OK) 
-                    {
-                        request_complete = true;
-                        break;
-                    } 
-                    else if (client->status == PARSE_INCOMPLETE) 
-                    {
-                        break;
-                    } 
-                    else if (client->status == PARSE_CONNECTION_CLOSED) {
-                        connection_ok = false;
-                        break;
-                    } 
-                    else if (client->status >= 400 && client->status < 600) 
-                    {
-                        client->status_code = client->status;
-                        request_complete = true;
-                        break;
-                    } 
-                    else 
-                    {
-                        connection_ok = false;
-                        break;
-                    }
+                    request_complete = true;
+                } 
+                else if (client->status == PARSE_INCOMPLETE) 
+                {
+                    request_complete = false;
+                } 
+                else if (client->status == PARSE_CONNECTION_CLOSED) 
+                {
+                    connection_ok = false;
+                } else 
+                {
+                    connection_ok = false;
                 }
 
                 if (!connection_ok) {
@@ -185,18 +162,17 @@ void start_server(std::vector<ServerCo>& configs)
                     continue;
                 }
 
-                if (request_complete)
+                if (request_complete) 
                 {
+                    std::cout << "read_buffer = " << client->read_buffer << std::endl;
                     client->prepare_response();
                     struct epoll_event ev;
                     ev.events = EPOLLOUT | EPOLLRDHUP;
                     ev.data.fd = fd;
-                    if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
-                    {
+                    if (epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev) == -1) {
                         perror("epoll_ctl MOD EPOLLOUT");
                         cleanup_connection(*target_server, fd, true);
                     }
-                    continue;
                 }
             }
             // handle write
