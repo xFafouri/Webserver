@@ -3,67 +3,104 @@
 #include <cstddef>
 #include <sys/types.h>
 
+std::string ft_content_type_cgi(const std::string& full_path)
+{
+    if (full_path.find(".py") != std::string::npos)
+        return ".py";
+    else if (full_path.find(".php") != std::string::npos)
+        return ".php";
+    else if (full_path.find(".pl") != std::string::npos)
+        return ".pl";
+    else return "";
+}
+
+bool Client::is_cgi_script(const std::string &path) 
+{
+    static const std::vector<std::string> cgi_exts = {".py", ".pl", ".cgi"};
+    
+    for (size_t i = 0; i < cgi_exts.size(); i++) 
+    {
+        if (path.size() >= cgi_exts[i].size() &&
+            path.compare(path.size() - cgi_exts[i].size(), cgi_exts[i].size(), cgi_exts[i]) == 0) 
+            {
+                return true;
+            }
+    }
+    return false;
+}
+
 bool Client::is_cgi_request() 
 {
-    // std::map<std::string , std::string> map_ext;
-    ///scripts/test.py?name=hamza
-    std::cout << "here "  << Hreq.uri << std::endl;
-    size_t dot_pos = Hreq.uri.rfind('.');
-    if (dot_pos == std::string::npos)
-        return false;
-    size_t qs = Hreq.uri.find('?');
-    if (qs != std::string::npos)
+    const Location* matchedLocation = nullptr;
+
+    
+    for (size_t i = 0; i < config.locations.size(); ++i) 
     {
-        if (Hreq.method == "GET")
+        if (Hreq.uri.find(config.locations[i].path) == 0) 
         {
-            std::cout << "GET script_file " << std::endl;
-            script_file = "." + Hreq.uri.substr(0,qs);
+            if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length()) 
+            {
+                matchedLocation = &config.locations[i];
+                location_idx = i;
+            }
         }
     }
-    else
-    {
-        std::cout << "without Query" << std::endl;
-        script_file = "." + Hreq.uri;
-    } 
-    std::cout << "script_file = " << script_file << std::endl;
-    //.py?name=hamza
-    std::string ext = Hreq.uri.substr(dot_pos, qs - dot_pos);
+    // std::cout << "@@@@@@@HERE00@@@@@" << std::endl;
+    if (!matchedLocation)
+        return false;
+    if (!matchedLocation->cgi_flag)
+        return false;
 
-    std::cout << "extension = " << ext << std::endl;
-    
-    int i = 0;
-    cgi_bin = false;
-    std::cout << "locations size = " << config.locations.size() << std::endl;
-    for(; i < config.locations.size() ;i++)
+    // 
+    if (Hreq.uri == matchedLocation->path || Hreq.uri == matchedLocation->path + "/") 
     {
-        std::cout << "ROOT = " << config.locations[i].path << std::endl;
-        if (config.locations[i].path == "/cgi-bin")
+        for (size_t i = 0; i < matchedLocation->index_files.size(); ++i) 
+        {
+            std::string index_path = matchedLocation->root + "/" + matchedLocation->index_files[i];
+            if (access(index_path.c_str(), F_OK) == 0) 
+            {
+                script_file = index_path;
+                std::cout << script_file << std::endl;
+                // std::cout << "@@@@@@@HERE11@@@@@" << std::endl;
+                extension = ft_content_type_cgi(script_file);
+                cgi_bin = true;
+                map_ext[".php"] = matchedLocation->cgi.php;
+                map_ext[".py"]  = matchedLocation->cgi.py;
+                map_ext[".pl"]  = matchedLocation->cgi.pl;
+                return true;
+            }
+        }
+        // std::cout << "@@@@@@@HERE22@@@@@" << std::endl;
+        return false; 
+    }
+
+    //cgi-bin/whatever.py
+    {
+        std::string relative_uri = Hreq.uri.substr(matchedLocation->path.length());
+        if (!relative_uri.empty() && relative_uri[0] == '/')
+            relative_uri.erase(0, 1);
+
+        script_file = matchedLocation->root + "/" + relative_uri;
+
+        std::cout << "here" << std::endl;
+        size_t dot_pos = script_file.rfind('.');
+        std::cout << "pos = " << dot_pos << std::endl;
+        if (dot_pos == std::string::npos)
+            return false;
+
+        extension = script_file.substr(dot_pos);
+
+        map_ext[".php"] = matchedLocation->cgi.php;
+        map_ext[".py"]  = matchedLocation->cgi.py;
+        map_ext[".pl"]  = matchedLocation->cgi.pl;
+
+        if (map_ext.find(extension) != map_ext.end()) 
         {
             cgi_bin = true;
-            break;
+            return true;
         }
+        return (extension == ".py" || extension == ".php" || extension == ".pl");
     }
-    if (cgi_bin == false || ext.empty())
-    {
-        std::cout << "cgi_bin false" << std::endl;
-        return false;
-    }
-    std::cout << "mo7alch" << std::endl;
-    location_idx = i;
-    extension = ext;
-
-    // if (ext == config.locations[i].cgi.php)
-    // {
-    // }
-    std::cout << "mo7alch1" << std::endl;
-
-    map_ext.insert(std::make_pair(".php", config.locations[i].cgi.php));
-    map_ext.insert(std::make_pair(".py", config.locations[i].cgi.py));
-    map_ext.insert(std::make_pair(".pl", config.locations[i].cgi.pl));
-    std::cout << "mo7alch2" << std::endl;
-    
-    // std::cout << "EXTENSION = " << config.locations[i].cgi.php << std::endl;
-    return (ext == ".py" || ext == ".php" || ext == ".pl");
 }
 
 void    Client::run_cgi()
@@ -72,13 +109,15 @@ void    Client::run_cgi()
     env_map.insert(std::make_pair("REQUEST_METHOD", Hreq.method));
     // env_map.insert(std::make_pair("SCRIPT_FILENAME", map_ext[extension]));
     // env_map.insert(std::make_pair("SCRIPT_FILENAME", map_ext[extension]));
-    std::string script_path = "./server/test.py";
+    // std::string script_file = "test.py";
+    // script_file = "./www/main/" + script_file;
+    // std::cout << "script_file = " << script_file << std::endl;
     env_map.insert(std::make_pair("SCRIPT_FILENAME", script_file));
 
     std::cout << "extesnion = " << map_ext[extension] << std::endl;
     if (Hreq.method == "GET")
     {
-         size_t dot_pos = Hreq.uri.find('?');
+        size_t dot_pos = Hreq.uri.find('?');
         if (dot_pos != std::string::npos)
             query_string = Hreq.uri.substr(dot_pos + 1);
         env_map["QUERY_STRING"] = query_string;
@@ -116,6 +155,7 @@ void    Client::run_cgi()
         std::cout << "env = " << envp[i] << std::endl;
         i++;
     }
+    std::cout << "map[ext] = " <<  map_ext[extension] << std::endl;
     char *argv[] = {
     (char*)map_ext[extension].c_str(),     
     (char*)script_file.c_str(),        
@@ -183,10 +223,14 @@ void    Client::run_cgi()
     } 
     else 
     {
-        std::cout << "123" << std::endl;
+        // std::cout << "123" << std::endl;
         body = cgi_output;
     }
 
+    if (body.empty())
+    {
+        body = cgi_output;
+    }
     std::string content_type = "text/html";
     std::istringstream hstream(headers);
     std::string line;
@@ -211,14 +255,7 @@ void    Client::run_cgi()
     // response << headers << "\r\n";
     response << "\r\n";
     response << body;
-    std::cout  << "body = " << body << std::endl;
-    // std::cout << "cgi output = " << cgi_output << std::endl;
-    
-
-    // std::cout << "headers = " << headers << std::endl;
-    // std::cout << "body = " << body << std::endl;
-    // std::cout << "cgi_output = " <<  cgi_output << std::endl;
-
+    // std::cout  << "body = " << body << std::endl;
     response_buffer = response.str();
     // std::cout << "response_buffer = " <<  response_buffer << std::endl; 
 
