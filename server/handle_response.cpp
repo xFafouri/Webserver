@@ -3,6 +3,7 @@
 
 void Client::prepare_response() 
 {
+    std::cout << "response status = " << status << std::endl;
     if (is_cgi && status == 200)
     {
         std::cout << "CGI" << std::endl;

@@ -105,7 +105,7 @@ std::vector<std::string> spliting( std::string& s, std::string& delimiter)
 
 // }
 
-void Client::reset_for_next_request() 
+void Client::reset_for_next_request()
 {
     send_offset = 0;
     std::cout << "@@@@ Resetting client state for next request\n";
@@ -254,9 +254,333 @@ std::string generate_temp_file_path()
     close(fd);
     return std::string(filename);
 }
+/*
+RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size) 
+{
+    char recv_buffer[4096];
+    ssize_t n = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0);
 
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return PARSE_INCOMPLETE; // no more data right now
+        }
+        return PARSE_CONNECTION_CLOSED; // real error
+    }
 
+    if (n == 0) {
+        return PARSE_CONNECTION_CLOSED; // client closed
+    }
 
+    read_buffer.append(recv_buffer, n);
+
+    // Now try parsing headers/body incrementally   
+    return parse_request(max_body_size);
+}
+
+RequestParseStatus Client::parse_request(long long max_body_size) 
+{
+    if (!Hreq.header.parsed) {
+        size_t header_end = read_buffer.find("\r\n\r\n");
+        if (header_end == std::string::npos) {
+            return PARSE_INCOMPLETE; // wait for more data
+        }
+
+        // Parse request line + headers...
+        // Fill Hreq.method, uri, version, headers
+        // Set Hreq.body.expected_size or chunked
+        Hreq.header.parsed = true;
+
+        // Erase headers from buffer, leave only body
+        Hreq.body._body = read_buffer.substr(header_end + 4);
+        read_buffer.erase(0, header_end + 4);
+    }
+
+    // --- Body parsing ---
+    if (Hreq.body.chunked) {
+        return handle_chunked_body(max_body_size);
+    } 
+    else if (Hreq.body.expected_size > 0) 
+    {
+        if (Hreq.body._body.size() < Hreq.body.expected_size) 
+        {
+            return PARSE_INCOMPLETE; // still waiting
+        }
+        request_received = true;
+        return PARSE_OK;
+    } else {
+        request_received = true;
+        return PARSE_OK;
+    }
+}
+
+if (events[i].events & EPOLLIN) 
+{
+    RequestParseStatus st = client->read_from_fd(fd, target_server->config.client_max_body_size);
+
+    if (st == PARSE_OK) 
+    {
+        // handle request fully received
+    } else if (st == PARSE_INCOMPLETE) 
+    {
+        // just wait for next EPOLLIN
+    } else if (st == PARSE_CONNECTION_CLOSED) 
+    {
+        // cleanup client
+    } 
+    else {
+        // error -> send 400/500
+    }
+}
+
+*/
+
+RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
+{
+    this->client_fd = client_fd;
+
+    char recv_buffer[80000];
+    ssize_t n = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0);
+
+    if (n > 0) 
+    {
+        read_buffer.append(recv_buffer, n);
+    } 
+    else if (n == 0) 
+    {
+        return PARSE_CONNECTION_CLOSED;
+    } 
+    else 
+    {
+        return PARSE_INCOMPLETE;
+    }
+
+    std::cout << "read_buffer = " << read_buffer << std::endl;
+    if (!Hreq.header.parsed) 
+    {
+        size_t header_end = read_buffer.find("\r\n\r\n");
+        size_t sep_len = 4;
+        if (header_end == std::string::npos) 
+        {
+            header_end = read_buffer.find("\n\n");
+            sep_len = 2;
+        }
+
+        
+        if (header_end == std::string::npos) 
+        {
+            return PARSE_INCOMPLETE;
+        }
+
+        // Find end of request line (CRLF or LF)
+        size_t line_end = read_buffer.find("\r\n");
+        size_t line_len = 2;
+        if (line_end == std::string::npos) 
+        {
+            line_end = read_buffer.find('\n');
+            line_len = 1;
+        }
+        if (line_end == std::string::npos || line_end > header_end) 
+        {
+            return PARSE_BAD_REQUEST;
+        }
+
+        std::string request_line = read_buffer.substr(0, line_end);
+        std::istringstream rl(request_line);
+        rl >> Hreq.method >> Hreq.uri >> Hreq.http_v;
+
+        if (Hreq.method == "GET") 
+        {
+            isGET = true;
+        }
+
+        if (Hreq.uri.length() > 4096) 
+        {
+            return REQUEST_URI_TOO_LONG;
+        }
+
+        std::string headers_block = read_buffer.substr(line_end + line_len,
+                                                       header_end - (line_end + line_len));
+        std::istringstream hs(headers_block);
+        std::string header_line;
+        while (std::getline(hs, header_line)) 
+        {
+            if (!header_line.empty() && header_line.back() == '\r')
+                header_line.pop_back();
+            size_t colon = header_line.find(':');
+            if (colon != std::string::npos) {
+                std::string key = header_line.substr(0, colon);
+                std::string value = header_line.substr(colon + 1);
+                trim(key); 
+                trim(value);
+                Hreq.map_header[key] = value;
+            }
+        }
+
+        Hreq.header.parsed = true;
+
+        if (is_cgi_request()) 
+        {
+            if (is_cgi_script(script_file)) 
+            {
+                is_cgi = true;
+            } 
+            else 
+            {
+                is_cgi = false;
+                map_ext.clear();
+                script_file.clear();
+            }
+            // is_cgi = true;
+        }
+
+        const Location* matchedLocation = nullptr;
+        Hreq.uri = normalize_path(Hreq.uri);
+
+        for (size_t i = 0; i < config.locations.size(); ++i)
+        {
+            if (Hreq.uri.find(config.locations[i].path) == 0)
+            {
+                if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
+                {
+                    matchedLocation = &config.locations[i];
+                }
+            }
+        }
+        bool post_method = false;
+        for (size_t index; index < matchedLocation->allowed_methods.size(); index++)
+        {
+            if (Hreq.method == matchedLocation->allowed_methods[index])
+                post_method = true;
+        }
+        if (Hreq.method == "POST" && post_method) 
+        {
+            if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end()) 
+            {
+                std::string cl = Hreq.map_header["Content-Length"];
+                Hreq.body.expected_size = std::atoll(cl.c_str());
+                std::cout << "max_body_size = " << max_body_size << std::endl;
+                std::cout << "expected_size = " << Hreq.body.expected_size << std::endl;
+                if (Hreq.body.expected_size > max_body_size)
+                    return PAYLOAD_TOO_LARGE;
+                if (Hreq.map_header.find("Content-Type") != Hreq.map_header.end()) 
+                {
+                    Hreq.content_type = trim(Hreq.map_header["Content-Type"]);
+                } 
+                else 
+                {
+                    return PARSE_BAD_REQUEST;
+                }
+            } 
+            else if (Hreq.map_header.find("Transfer-Encoding") != Hreq.map_header.end()
+                        && Hreq.map_header["Transfer-Encoding"].find("chunked") != std::string::npos) {
+                Hreq.body.chunked = true;
+            } 
+            else 
+            {
+                return PARSE_BAD_REQUEST;
+            }
+        }
+        else if (Hreq.method == "POST" && !post_method)
+        {
+            std::cout << "!!!!!! ERROR: there is NO POST METHOD ALLOWED ON THIS LOCATION" << std::endl;
+        }
+        // } else {
+        //     //non-POST
+        // }
+
+        size_t body_start = header_end + sep_len;
+        if (body_start < read_buffer.size()) 
+        {
+            Hreq.body._body.append(read_buffer.substr(body_start));
+        }
+        read_buffer.clear();
+
+        if (!Hreq.body.chunked && Hreq.body.expected_size == 0) 
+        {
+            request_received = true;
+            return PARSE_OK;
+        }
+
+        if (Hreq.body._body.size() > max_body_size) 
+        {
+            return PAYLOAD_TOO_LARGE;
+        }
+    } 
+    else 
+    {
+        if (!read_buffer.empty()) 
+        {
+            Hreq.body._body.append(read_buffer);
+            read_buffer.clear();
+            if (Hreq.body._body.size() > (size_t)max_body_size)
+                return PAYLOAD_TOO_LARGE;
+        }
+    }
+
+    std::cout << Hreq.header.parsed << " header parsed" <<  std::endl;
+
+    if (Hreq.body.chunked) 
+    {
+        try 
+        {
+            handle_chunked_body(max_body_size);
+        } 
+        catch (const std::exception &e) 
+        {
+            return PAYLOAD_TOO_LARGE;
+        }
+
+        if (Hreq.body.is_done) 
+        {
+            if (Hreq.method == "POST") 
+            {
+                std::string file_path = generate_temp_file_path();
+                std::ofstream outfile(file_path.c_str(), std::ios::binary);
+                if (outfile.is_open()) 
+                {
+                    outfile << Hreq.body.data;
+                    outfile.close();
+                }
+                Hreq.body.reset();
+            }
+            request_received = true;
+            return PARSE_OK;
+        } 
+        else 
+        {
+            std::cout << "HERE4" << std::endl;
+            return PARSE_INCOMPLETE;
+        }
+    }
+
+    if (Hreq.body.expected_size > 0) 
+    {
+        std::cout << "Body_size = "<< Hreq.body._body.size() << std::endl;
+        if (Hreq.body._body.size() < Hreq.body.expected_size ) 
+        {
+            return PARSE_INCOMPLETE;
+        }
+        // std::cout <<  "Body = " << Hreq.body._body << std::endl;
+        if (Hreq.method == "POST") 
+        {
+            std::string file_path = generate_temp_file_path();
+            // std::string file_path ;
+            std::ofstream outfile(file_path.c_str(), std::ios::binary);
+            if (outfile.is_open()) {
+                outfile << Hreq.body._body;
+                outfile.close();
+            }
+            Hreq.body._body.clear();
+        }
+
+        request_received = true;
+        return PARSE_OK;
+    }
+    std::cout << "HERE3" << std::endl;
+    return PARSE_INCOMPLETE;
+}
+
+/*
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
     char recv_buffer[4096];
@@ -410,7 +734,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             }
             if (Hreq.body.is_done) 
             {
-                if (Hreq.method == "POST" && is_cgi == false)
+                if (Hreq.method == "POST")
                 {
                     std::string file_path = generate_temp_file_path();
                     std::cout << "file_path = " <<  file_path << std::endl;
@@ -439,7 +763,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             if (Hreq.content_type.find("application/json") == 0 || Hreq.content_type == "text/plain")
             {
                 std::cout << "app/json" << std::endl;
-                if (Hreq.method == "POST" && is_cgi == false)
+                if (Hreq.method == "POST")
                 {
                     std::string file_path = generate_temp_file_path();
                     std::ofstream outfile(file_path.c_str());
@@ -538,9 +862,10 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                             }
                             if (Hreq.method == "POST")
                             {
-                                std::string file_path = filename;
-                                // std::string file_path = generate_temp_file_path();
-                                std::ofstream outfile(file_path.c_str());
+                                // std::string file_path = filename;
+                                // std::cout << "origin file name " << filename << std::endl;
+                                const std::string &file_path = filename;
+                                std::ofstream outfile(file_path);
                                 // std::cout << "part = " << part << std::endl;
                                 if (outfile.is_open()) 
                                 {
@@ -593,7 +918,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 else {
                                     body_part.clear();
                                 }
-                                // std::cout << "content = " << body_part;
+                                std::cout << "content = " << body_part << std::endl;
                             }
                         }
                     }
@@ -602,14 +927,14 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                     }
                     Hreq.body.chunk_done = true;
                     request_received = true;
-                    filename.clear();
-                    name.clear();
-                    content.clear();
-                    std::cout << "After content = " << content << std::endl;
-                    boundary.clear();
-                    body_vector.clear();
-                    Hreq.body._body.clear();
-                    read_buffer.clear();
+                    // filename.clear();
+                    // name.clear();
+                    // content.clear();
+                    // std::cout << "After content = " << content << std::endl;
+                    // boundary.clear();
+                    // body_vector.clear();
+                    // Hreq.body._body.clear();
+                    // read_buffer.clear();
                 }
             }
         }
@@ -621,3 +946,4 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
     else
         return PARSE_INCOMPLETE;
 }
+*/
