@@ -244,7 +244,7 @@ std::string Client::ft_content_type(const std::string& full_path)
 
 std::string generate_temp_file_path()
 {
-    char filename[] = "/tmp/body_XXXXXX";
+    char filename[] = "XXXXXX";
     int fd = mkstemp(filename);
     if (fd == -1)
     {
@@ -354,7 +354,8 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         return PARSE_INCOMPLETE;
     }
 
-    std::cout << "read_buffer = " << read_buffer << std::endl;
+    // std::cout << "read_buffer = " << read_buffer << std::endl;
+    const Location* matchedLocation = nullptr;
     if (!Hreq.header.parsed) 
     {
         size_t header_end = read_buffer.find("\r\n\r\n");
@@ -433,7 +434,6 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             // is_cgi = true;
         }
 
-        const Location* matchedLocation = nullptr;
         Hreq.uri = normalize_path(Hreq.uri);
 
         for (size_t i = 0; i < config.locations.size(); ++i)
@@ -443,21 +443,23 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                 if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
                 {
                     matchedLocation = &config.locations[i];
+                    file_path = matchedLocation->upload_store;                 
                 }
             }
         }
-        bool post_method = false;
-        for (size_t index; index < matchedLocation->allowed_methods.size(); index++)
-        {
-            if (Hreq.method == matchedLocation->allowed_methods[index])
-                post_method = true;
-        }
-        if (Hreq.method == "POST" && post_method) 
+        // bool post_method = false;
+        // for (size_t index; index < matchedLocation->allowed_methods.size(); index++)
+        // {
+        //     if (Hreq.method == matchedLocation->allowed_methods[index])
+        //         post_method = true;
+        // }
+        if (Hreq.method == "POST") 
         {
             if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end()) 
             {
                 std::string cl = Hreq.map_header["Content-Length"];
                 Hreq.body.expected_size = std::atoll(cl.c_str());
+                Hreq.content_length = Hreq.body.expected_size ;
                 std::cout << "max_body_size = " << max_body_size << std::endl;
                 std::cout << "expected_size = " << Hreq.body.expected_size << std::endl;
                 if (Hreq.body.expected_size > max_body_size)
@@ -480,10 +482,10 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                 return PARSE_BAD_REQUEST;
             }
         }
-        else if (Hreq.method == "POST" && !post_method)
-        {
-            std::cout << "!!!!!! ERROR: there is NO POST METHOD ALLOWED ON THIS LOCATION" << std::endl;
-        }
+        // else if (Hreq.method == "POST" && !post_method)
+        // {
+        //     std::cout << "!!!!!! ERROR: there is NO POST METHOD ALLOWED ON THIS LOCATION" << std::endl;
+        // }
         // } else {
         //     //non-POST
         // }
@@ -534,6 +536,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         {
             if (Hreq.method == "POST") 
             {
+                // std::string file_path = generate_temp_file_path();
                 std::string file_path = generate_temp_file_path();
                 std::ofstream outfile(file_path.c_str(), std::ios::binary);
                 if (outfile.is_open()) 
@@ -563,10 +566,16 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         // std::cout <<  "Body = " << Hreq.body._body << std::endl;
         if (Hreq.method == "POST") 
         {
-            std::string file_path = generate_temp_file_path();
+            // std::string file_path = generate_temp_file_path();
+            std::string file_name = file_path + "/" + generate_temp_file_path();
+            std::cout << "Matched Location Store =  " << file_name  << std::endl;
+            // if (!matchedLocation->upload_store.empty())
+            //     std::cout << "upload store = " <<  matchedLocation->upload_store  << std::endl;
+            // std::cout << "file path = " << file_path << std::endl;
             // std::string file_path ;
-            std::ofstream outfile(file_path.c_str(), std::ios::binary);
-            if (outfile.is_open()) {
+            std::ofstream outfile(file_name.c_str(), std::ios::binary);
+            if (outfile.is_open()) 
+            {
                 outfile << Hreq.body._body;
                 outfile.close();
             }
