@@ -4,13 +4,13 @@
 void Client::prepare_response() 
 {
     std::cout << "response status = " << status << std::endl;
-    if (is_cgi && status == 200)
-    {
-        std::cout << "CGI" << std::endl;
-        run_cgi();
-        response_ready = true;
-    }
-    else if (isGET && status == 200)
+    // if (is_cgi && status == 200)
+    // {
+    //     std::cout << "CGI" << std::endl;
+    //     // run_cgi();
+    //     response_ready = true;
+    // }
+    if (isGET && status == 200)
     {
         std::cout << "GET METHOD " << std::endl;
         getMethod();

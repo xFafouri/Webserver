@@ -8,7 +8,7 @@ import cgitb
 # Enable detailed error reports
 cgitb.enable()
 
-upload_dir = "./www/main/cgi-bin/uploads/"
+upload_dir = "/home/hfafouri/Desktop/webserver20/www/main/uploads"
 os.makedirs(upload_dir, exist_ok=True)
 
 # Parse form data

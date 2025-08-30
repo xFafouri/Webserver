@@ -1,5 +1,6 @@
 #include "server.hpp"
 
+#include <chrono>
 
 Server::Server(const ServerCo& conf) : config(conf)
 {
@@ -334,6 +335,14 @@ if (events[i].events & EPOLLIN)
 
 */
 
+
+static inline uint64_t now_ms() 
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+
 RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 {
     this->client_fd = client_fd;
@@ -365,13 +374,13 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             header_end = read_buffer.find("\n\n");
             sep_len = 2;
         }
-
+        
         
         if (header_end == std::string::npos) 
         {
             return PARSE_INCOMPLETE;
         }
-
+        
         // Find end of request line (CRLF or LF)
         size_t line_end = read_buffer.find("\r\n");
         size_t line_len = 2;
@@ -384,10 +393,28 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         {
             return PARSE_BAD_REQUEST;
         }
-
+        
         std::string request_line = read_buffer.substr(0, line_end);
+        std::cout << "request_line = " <<  request_line << std::endl;
         std::istringstream rl(request_line);
         rl >> Hreq.method >> Hreq.uri >> Hreq.http_v;
+        
+        std::cout << "uri before " << Hreq.uri << std::endl;
+        Hreq.uri = normalize_path(Hreq.uri);
+        std::cout << "uri after " << Hreq.uri << std::endl;
+
+        for (size_t i = 0; i < config.locations.size(); ++i)
+        {
+            if (Hreq.uri.find(config.locations[i].path) == 0)
+            {
+                if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
+                {
+                    matchedLocation = &config.locations[i];
+                    // std::cout << "match location " << std::endl;
+                    file_path = matchedLocation->upload_store;             
+                }
+            }
+        }
 
         if (Hreq.method == "GET") 
         {
@@ -433,26 +460,22 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
             }
             // is_cgi = true;
         }
+        
+        // std::cout << "size allowed method = "<< matchedLocation->allowed_methods.size() << std::endl;
+        // std::cout << "HERE-----1" << std::endl;
 
-        Hreq.uri = normalize_path(Hreq.uri);
-
-        for (size_t i = 0; i < config.locations.size(); ++i)
+        bool post_method = false;
+        for (size_t index = 0; index < matchedLocation->allowed_methods.size(); index++)
         {
-            if (Hreq.uri.find(config.locations[i].path) == 0)
-            {
-                if (!matchedLocation || config.locations[i].path.length() > matchedLocation->path.length())
-                {
-                    matchedLocation = &config.locations[i];
-                    file_path = matchedLocation->upload_store;                 
-                }
-            }
+            if (Hreq.method == matchedLocation->allowed_methods[index])
+                post_method = true;
         }
-        // bool post_method = false;
-        // for (size_t index; index < matchedLocation->allowed_methods.size(); index++)
-        // {
-        //     if (Hreq.method == matchedLocation->allowed_methods[index])
-        //         post_method = true;
-        // }
+        // std::cout << "HERE-----2" << std::endl;
+        if (post_method == false)
+        {
+            return REQUEST_METHOD_NOT_ALLOWED;
+        }
+
         if (Hreq.method == "POST") 
         {
             if (Hreq.map_header.find("Content-Length") != Hreq.map_header.end()) 
@@ -519,6 +542,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         }
     }
 
+
     std::cout << Hreq.header.parsed << " header parsed" <<  std::endl;
 
     if (Hreq.body.chunked) 
@@ -567,6 +591,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         if (Hreq.method == "POST") 
         {
             // std::string file_path = generate_temp_file_path();
+            std::cout << file_path << std::endl;
             std::string file_name = file_path + "/" + generate_temp_file_path();
             std::cout << "Matched Location Store =  " << file_name  << std::endl;
             // if (!matchedLocation->upload_store.empty())
