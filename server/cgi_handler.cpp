@@ -103,10 +103,310 @@ bool Client::is_cgi_request()
     }
 }
 
-void    Client::run_cgi()
+static inline void nb_set(int fd) 
 {
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+}
+
+static size_t parse_header_block(const std::string& hdrs,
+                                 std::string& status_line,
+                                 std::string& content_type,
+                                 ssize_t& content_len)
+{
+    // returns number of bytes in header block (unused here), fills fields if present.
+    // We accept both CRLF and LF line endings (CGI spec permits CRLF).
+    size_t consumed = hdrs.size();
+    content_len = -1;
+    content_type.clear();
+    // default status_line remains as-is unless "Status:" found
+
+    size_t start = 0;
+    while (start < hdrs.size()) 
+    {
+        size_t end = hdrs.find('\n', start);
+        if (end == std::string::npos) 
+            end = hdrs.size();
+        std::string line = hdrs.substr(start, end - start);
+        // trim trailing CR
+        if (!line.empty() && line.back() == '\r') 
+            line.pop_back();
+
+        // empty line should not be here (caller cuts at separator),
+        // but we ignore if present.
+        if (!line.empty()) 
+        {
+            if (line.size() >= 7 && strncasecmp(line.c_str(), "Status:", 7) == 0) 
+            {
+                std::string v = line.substr(7);
+                // trim leading spaces
+                while (!v.empty() && (v[0] == ' ' || v[0] == '\t')) v.erase(0, 1);
+                if (!v.empty()) status_line = v; // e.g. "404 Not Found"
+            } 
+            else if (line.size() >= 13 && strncasecmp(line.c_str(), "Content-Type:", 13) == 0) 
+            {
+                std::string v = line.substr(13);
+                while (!v.empty() && (v[0] == ' ' || v[0] == '\t')) 
+                    v.erase(0, 1);
+                if (!v.empty()) 
+                    content_type = v;
+            } 
+            else if (line.size() >= 15 && strncasecmp(line.c_str(), "Content-Length:", 15) == 0)
+            {
+                std::string v = line.substr(15);
+                while (!v.empty() && (v[0] == ' ' || v[0] == '\t')) v.erase(0, 1);
+                if (!v.empty()) content_len = static_cast<ssize_t>(atoll(v.c_str()));
+            }
+        }
+
+        if (end == hdrs.size()) 
+            break;
+        start = end + 1;
+    }
+    return consumed;
+}
+
+void Client::finalize_cgi(bool eof_seen)
+{
+    cgi_state = CGI_DONE;
+
+    // Ensure child is reaped
+    int status;
+    waitpid(cgi_pid, &status, WNOHANG);
+    cgi_pid = -1;
+
+    // Extract headers/body
+    std::string headers, body;
+    if (!cgi_hdr_parsed) 
+    {
+        // No explicit headers: entire output is body, default type text/html
+        headers.clear();
+        body = cgi_raw;
+        cgi_content_type = "text/html";
+        cgi_content_len = static_cast<ssize_t>(body.size());
+    } else {
+        headers = cgi_raw.substr(0, cgi_sep_pos);
+        body    = (cgi_sep_pos + cgi_sep_len <= cgi_raw.size())
+                    ? cgi_raw.substr(cgi_sep_pos + cgi_sep_len)
+                    : std::string();
+
+        if (cgi_content_len < 0) {
+            // No Content-Length provided by CGI -> we use EOF length
+            cgi_content_len = static_cast<ssize_t>(body.size());
+        } else {
+            // If CGI wrote more than it declared, clamp body
+            if (body.size() > static_cast<size_t>(cgi_content_len))
+                body.resize(static_cast<size_t>(cgi_content_len));
+        }
+        if (cgi_content_type.empty())
+            cgi_content_type = "text/html";
+    }
+
+    // Build HTTP response from parsed CGI headers (pass-through allowed except Status/CL/CT)
+    std::ostringstream oss;
+    // Status line
+    oss << "HTTP/1.1 " << (cgi_status_line.empty() ? "200 OK" : cgi_status_line) << "\r\n";
+
+    // Propagate CGI headers except Status, Content-Length, Content-Type (we provide our own)
+    {
+        if (!headers.empty()) {
+            std::istringstream hs(headers);
+            std::string line;
+            while (std::getline(hs, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (line.empty()) continue;
+                // filter
+                if (!strncasecmp(line.c_str(), "Status:", 7) ||
+                    !strncasecmp(line.c_str(), "Content-Length:", 15) ||
+                    !strncasecmp(line.c_str(), "Content-Type:", 13)) {
+                    continue;
+                }
+                oss << line << "\r\n"; // pass-through
+            }
+        }
+    }
+
+    // Our Content-Type and Content-Length
+    oss << "Content-Type: " << cgi_content_type << "\r\n";
+    oss << "Content-Length: " << cgi_content_len << "\r\n";
+    oss << "\r\n";
+    oss.write(body.data(), body.size());
+
+    response_buffer = oss.str();
+    send_offset = 0;            // your existing partial-send machinery
+    response_ready = true;      // if you use this flag
+}
+
+
+void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
+{
+    if (cgi_state == CGI_ERROR || cgi_state == CGI_DONE || cgi_state == CGI_TIMED_OUT) 
+        return;
+
+    // Timeout is enforced by the server loop, but we can opportunistically refresh if we receive data
+    auto refresh_deadline = [&](){ cgi_deadline_ms = now_ms() + (cgi_deadline_ms ? (cgi_deadline_ms - (cgi_deadline_ms - now_ms())) : 5000); };
+
+    // 1) handle stdin (writing request body to CGI)
+    if (fd == cgi_stdin_fd) 
+    {
+        if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
+        {
+            // Child closed stdin / error -> we can't write more. Close and stop watching.
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
+            close(cgi_stdin_fd);
+            cgi_stdin_fd = -1;
+        } 
+        else if (events & EPOLLOUT) 
+        {
+            const std::string& body = Hreq.body._body; // unchunked by your HTTP parser
+            if (cgi_stdin_off < body.size()) 
+            {
+                ssize_t n = write(cgi_stdin_fd, body.data() + cgi_stdin_off,
+                                  std::min<size_t>(8192, body.size() - cgi_stdin_off));
+                if (n > 0) 
+                {
+                    cgi_stdin_off += static_cast<size_t>(n);
+                    refresh_deadline();
+                }
+            }
+            if (cgi_stdin_off >= body.size()) 
+            {
+                // done sending body: close stdin, stop watching
+                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
+                close(cgi_stdin_fd);
+                cgi_stdin_fd = -1;
+            }
+        }
+    }
+
+    // 2) handle stdout (reading CGI output)
+    if (fd == cgi_stdout_fd) 
+    {
+        if (events & EPOLLIN) 
+        {
+            char buf[8192];
+            while (true) 
+            {
+                ssize_t n = read(cgi_stdout_fd, buf, sizeof(buf));
+                if (n > 0) 
+                {
+                    cgi_raw.append(buf, n);
+                    refresh_deadline();
+                    // Try to detect header/body split
+                    if (!cgi_hdr_parsed) 
+                    {
+                        size_t p = cgi_raw.find("\r\n\r\n");
+                        size_t sep_len = 4;
+                        if (p == std::string::npos) 
+                        {
+                            p = cgi_raw.find("\n\n");
+                            sep_len = 2;
+                        }
+                        if (p != std::string::npos) 
+                        {
+                            cgi_hdr_parsed = true;
+                            cgi_sep_pos = p;
+                            cgi_sep_len = sep_len;
+                            // parse headers we have so far
+                            const std::string hdrs = cgi_raw.substr(0, cgi_sep_pos);
+                            parse_header_block(hdrs, cgi_status_line, cgi_content_type, cgi_content_len);
+                        }
+                    }
+                    // If we already know Content-Length, we can finalize once enough bytes are read
+                    if (cgi_hdr_parsed && cgi_content_len >= 0) 
+                    {
+                        size_t have_body = (cgi_raw.size() > cgi_sep_pos + cgi_sep_len)
+                                             ? (cgi_raw.size() - (cgi_sep_pos + cgi_sep_len))
+                                             : 0;
+                        if (have_body >= static_cast<size_t>(cgi_content_len)) 
+                        {
+                            // We have all bytes the CGI promised. We can finish right now.
+                            // Stop watching stdout; close it; finalize.
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+                            close(cgi_stdout_fd);
+                            cgi_stdout_fd = -1;
+                            finalize_cgi(/*eof=*/false);
+                            return;
+                        }
+                    }
+                } else if (n == 0) 
+                {
+                    // EOF: child closed stdout. We can finalize (even without Content-Length).
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+                    close(cgi_stdout_fd);
+                    cgi_stdout_fd = -1;
+                    finalize_cgi(/*eof=*/true);
+                    return;
+                } 
+                else {
+                    // n < 0: don't spin. We'll wait for next EPOLLIN.
+                    break;
+                }
+            }
+        }
+
+        if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) 
+        {
+            // treat as EOF/error and finalize with whatever we have
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+            close(cgi_stdout_fd);
+            cgi_stdout_fd = -1;
+            finalize_cgi(/*eof=*/true);
+            return;
+        }
+    }
+}
+
+void Client::abort_cgi(int epoll_fd)
+{
+    if (cgi_pid > 0) 
+    {
+        kill(cgi_pid, SIGKILL);
+        int status; 
+        waitpid(cgi_pid, &status, 0);
+        cgi_pid = -1;
+    }
+    if (cgi_stdin_fd != -1) 
+    {
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
+        close(cgi_stdin_fd);
+        cgi_stdin_fd = -1;
+    }
+    if (cgi_stdout_fd != -1) 
+    {
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+        close(cgi_stdout_fd);
+        cgi_stdout_fd = -1;
+    }
+    cgi_state = CGI_TIMED_OUT;
+
+    const char* msg = "Gateway Timeout";
+    std::ostringstream oss;
+    oss << "HTTP/1.1 504 Gateway Timeout\r\n"
+        << "Content-Type: text/plain\r\n"
+        << "Content-Length: " << strlen(msg) << "\r\n"
+        << "\r\n"
+        << msg;
+
+    response_buffer = oss.str();
+    send_offset     = 0;
+    response_ready  = true;
+}
+
+long long  Client::now_ms() 
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+}
+
+bool    Client::run_cgi(int epoll_fd, int timeout_ms)
+{
+    long long start_time = now_ms();
     std::string query_string;
     env_map.insert(std::make_pair("REQUEST_METHOD", Hreq.method));
+    env_map.insert(std::make_pair("SERVER_PROTOCOL", "HTTP/1.1"));
+
     // env_map.insert(std::make_pair("SCRIPT_FILENAME", map_ext[extension]));
     // env_map.insert(std::make_pair("SCRIPT_FILENAME", map_ext[extension]));
     // std::string script_file = "test.py";
@@ -164,16 +464,34 @@ void    Client::run_cgi()
     // char *argv[] = {(char*)map_ext[extension].c_str(), NULL };
 
     std::cout << "fork" << std::endl;
+
     int in_pipe[2];
     int out_pipe[2];
-    pipe(in_pipe);
-    pipe(out_pipe);
+    if (pipe(in_pipe) == -1)
+    {
+        return false;
+    }
+    if (pipe(out_pipe) == -1) 
+    { 
+        close(in_pipe[0]); 
+        close(in_pipe[1]); 
+        return false;
+    }
     // pipe(fd);
-
+    // std::string dir = script_file.substr(0, script_file.find_last_of('/'));
+    //     chdir(dir.c_str());
     int pid = fork();
+      if (pid == -1) 
+    {
+        close(in_pipe[0]); close(in_pipe[1]);
+        close(out_pipe[0]); close(out_pipe[1]);
+        // return false;
+    }
 
     if (pid == 0)
     {
+        // ---- child ----
+        // stdin <- in_pipe[0], stdout -> out_pipe[1]
         dup2(in_pipe[0], STDIN_FILENO);
         dup2(out_pipe[1], STDOUT_FILENO);
 
@@ -183,80 +501,70 @@ void    Client::run_cgi()
         execve(argv[0], argv, envp);
     }
 
+    // parent
+    cgi_pid       = pid;
+    cgi_stdin_fd  = in_pipe[1];
+    cgi_stdout_fd = out_pipe[0];
+
     close(in_pipe[0]);
     close(out_pipe[1]);
-    
-    if (Hreq.method == "POST") 
-    {
-        write(in_pipe[1], Hreq.body._body.c_str(), Hreq.body._body.size());
-    }
-    close(in_pipe[1]);
-    
-    char buffer[8192];
-    ssize_t n;
-    std::string cgi_output;
-    
-    while ((n = read(out_pipe[0], buffer, sizeof(buffer))) > 0)
-        cgi_output.append(buffer, n);
 
-    close(out_pipe[0]);
-    waitpid(pid, NULL, 0);
-    
-    std::stringstream response;
+      // non-blocking
+    nb_set(cgi_stdin_fd);
+    nb_set(cgi_stdout_fd);
 
-    size_t header_end = cgi_output.find("\r\n\r\n");
-    size_t sep_len = 4;
-    if (header_end == std::string::npos) 
+    // register to epoll
+    epoll_event ev;
+
+    // we always read CGI stdout
+    epoll_fd = epoll_create(1);
+
+    ev.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
+    ev.data.fd = cgi_stdout_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cgi_stdout_fd, &ev) == -1) 
     {
-        header_end = cgi_output.find("\n\n");
-        sep_len = 2;
+        close(cgi_stdin_fd); close(cgi_stdout_fd);
+        cgi_stdin_fd = cgi_stdout_fd = -1;
+        // return false;
     }
 
-    std::string headers;
-    std::string body;
-    if (header_end != std::string::npos)
+    // if POST body present, we need to write it to CGI stdin
+    if (Hreq.method == "POST" && !Hreq.body._body.empty()) 
     {
-        headers = cgi_output.substr(0, header_end);
-        std::cout << "header_end" << header_end << std::endl;
-        body = cgi_output.substr(header_end + sep_len); 
-        // std::cout << "body" << body << std::endl;
+        ev.events = EPOLLOUT | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
+        ev.data.fd = cgi_stdin_fd;
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cgi_stdin_fd, &ev) == -1) {
+            // cleanup
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, nullptr);
+            close(cgi_stdin_fd); close(cgi_stdout_fd);
+            cgi_stdin_fd = cgi_stdout_fd = -1;
+            // return false;
+        }
     } 
     else 
     {
-        // std::cout << "123" << std::endl;
-        body = cgi_output;
+        // no body to send: close child's stdin immediately
+        close(cgi_stdin_fd);
+        cgi_stdin_fd = -1;
     }
+    
+    waitpid(pid, NULL, 0);
+ 
+     // initialize CGI state
+    cgi_state        = CGI_SPAWNED;
+    cgi_deadline_ms  = now_ms() + (timeout_ms > 0 ? (uint64_t)timeout_ms : 5000); // default 5s
+    cgi_raw.clear();
+    cgi_hdr_parsed   = false;
+    cgi_sep_pos      = std::string::npos;
+    cgi_sep_len      = 0;
+    cgi_status_line  = "200 OK";
+    cgi_content_type.clear();
+    cgi_content_len  = -1;
+    cgi_stdin_off    = 0;
 
-    if (body.empty())
-    {
-        body = cgi_output;
-    }
-    std::string content_type = "text/html";
-    std::istringstream hstream(headers);
-    std::string line;
-    while (std::getline(hstream, line)) 
-    {
-        size_t n = line.find("Content-Type:");
-        if (line.find("Content-Type:") != std::string::npos) 
-        {
-            content_type = line.substr(n + 13);
-            while (!content_type.empty() && (content_type[0] == ' ' || content_type[0] == '\t'))
-                content_type.erase(0, 1);
-            std::cout << "content_type1 = " << content_type << std::endl;
-        }
-    }
     // content_type = "binary/octet-stream";
-    response << "HTTP/1.1 200 OK\r\n";
-    response << "Content-Type: " << content_type << "\r\n";
-    // std::cout << "content-type = " <<  content_type << std::endl;
-    response << "Content-Length: " << body.size() << "\r\n";
-        // std::cout << "headers = " << headers << std::endl;
-
-    // response << headers << "\r\n";
-    response << "\r\n";
-    response << body;
-    // std::cout  << "body = " << body << std::endl;
-    response_buffer = response.str();
+ 
+    return true;
     // std::cout << "response_buffer = " <<  response_buffer << std::endl; 
 
 }

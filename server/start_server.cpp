@@ -38,6 +38,7 @@ void cleanup_connection(Server& sock, int fd, bool remove_file = false)
     epoll_ctl(sock.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 }
 
+
 void start_server(std::vector<ServerCo>& configs)
 {
     std::vector<Server> servers;
@@ -78,6 +79,7 @@ void start_server(std::vector<ServerCo>& configs)
         for (int i = 0; i < num_events; ++i)
         {
             int fd = events[i].data.fd;
+            uint32_t ev = events[i].events;
 
             Server* target_server = nullptr;
             Client* client = nullptr;
@@ -100,11 +102,25 @@ void start_server(std::vector<ServerCo>& configs)
                     // client->allowed_methods = target_server->config.locations[j].allowed_methods;
                     break;
                 }
+                // check CGI fds
+                for (std::map<int, Client*>::iterator it = servers[j].sock_map.begin(); it != servers[j].sock_map.end(); ++it) 
+                {
+                    Client* c = it->second;
+                    if (c->cgi_state == CGI_IO && (fd == c->cgi_stdout_fd || fd == c->cgi_stdin_fd)) {
+                        target_server = &servers[j];
+                        client = c;
+                        break;
+                    }
+                }
+                if (client) 
+                    break;
             }
+            
 
-            if (!target_server) 
+            if (!target_server || !client) 
                 continue;
 
+            // --- CASE 1: server socket ---
             if (fd == target_server->server_fd)
             {
                 int client_fd = accept(fd, (sockaddr*)&target_server->address, &target_server->addrlen);
@@ -128,6 +144,14 @@ void start_server(std::vector<ServerCo>& configs)
                 continue;
             }
 
+            // --- CASE 2: CGI fd ---
+            if (fd == client->cgi_stdout_fd || fd == client->cgi_stdin_fd) 
+            {
+                client->on_cgi_event(global_epoll, fd, ev);
+                continue;
+            }
+
+            // --- CASE 3: normal client socket ---
             if (events[i].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) 
             {
                 cleanup_connection(*target_server, fd, true);
@@ -152,19 +176,36 @@ void start_server(std::vector<ServerCo>& configs)
                 else if (client->status == PARSE_CONNECTION_CLOSED) 
                 {
                     connection_ok = false;
-                } else 
+                } 
+                else 
                 {
                     connection_ok = false;
                 }
 
-                if (!connection_ok) {
+                if (!connection_ok) 
+                {
                     cleanup_connection(*target_server, fd, true);
                     continue;
                 }
-
+                    
+                if (request_complete && client->is_cgi)
+                {
+                    if (!client->run_cgi(global_epoll, 5000)) 
+                    {
+                        client->response_ready = true;
+                        epoll_event ev; ev.events = EPOLLOUT | EPOLLRDHUP; ev.data.fd = fd;
+                        epoll_ctl(global_epoll, EPOLL_CTL_MOD, fd, &ev);
+                        
+                    } 
+                    else 
+                    {
+                        client->cgi_state = CGI_IO;
+                    }
+                    continue;
+                }
                 if (request_complete) 
                 {
-                    std::cout << "read_buffer = " << client->read_buffer << std::endl;
+                    // std::cout << "Read_buffer = " << client->read_buffer << std::endl;
                     client->prepare_response();
                     struct epoll_event ev;
                     ev.events = EPOLLOUT | EPOLLRDHUP;
@@ -182,7 +223,7 @@ void start_server(std::vector<ServerCo>& configs)
 
                 if (write_complete)
                 {
-                    client->Hreq.header.map_header["Connection"] = "close";
+                    // client->Hreq.header.map_header["Connection"] = "close";
                     if (client->Hreq.header.map_header["Connection"] == "close")
                         cleanup_connection(*target_server, fd, true);
                     else

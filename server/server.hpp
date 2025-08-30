@@ -85,6 +85,20 @@ class Header
         bool parsed = false;
 };
 
+// ---- Client.hpp additions ----
+#include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <chrono>
+
+enum CgiState {
+    CGI_IDLE = 0,
+    CGI_SPAWNED,
+    CGI_IO,          // sending POST 
+    CGI_DONE,
+    CGI_ERROR,
+    CGI_TIMED_OUT
+};
 
 enum RequestParseStatus
 {
@@ -142,6 +156,7 @@ class Client
 {
     public:
         Client();
+        // std::map<int, CgiContext> cgi_map;
         ServerCo config;
         long long client_max_body_size;
         std::vector<std::string> allowed_methods;
@@ -151,10 +166,34 @@ class Client
         std::string file_path;
         
 
-        // cgi 
-        bool is_cgi_script(const std::string &path);
-        bool is_cgi_request();
-        void    run_cgi();
+        // cgi
+        pid_t       cgi_pid       = -1;
+        int         cgi_stdin_fd  = -1;  // parent writes request body to this (child's STDIN)
+        int         cgi_stdout_fd = -1;  // parent reads CGI output from this (child's STDOUT)
+        size_t      cgi_stdin_off = 0;   // how many bytes of request body already written
+        CgiState    cgi_state     = CGI_IDLE;
+
+        // CGI accumulation buffers
+        std::string cgi_raw;
+        bool        cgi_hdr_parsed = false;
+        size_t      cgi_sep_pos    = std::string::npos; // "\r\n\r\n" (or "\n\n") split index
+        size_t      cgi_sep_len    = 0;
+
+        // Parsed header info
+        std::string cgi_status_line;     // e.g. "200 OK" (fall back if no Status header)
+        std::string cgi_content_type;    // from Content-Type header
+        ssize_t     cgi_content_len = -1;// from Content-Length header or -1 if absent
+
+        // Deadline
+        uint64_t    cgi_deadline_ms = 0; // monotonic ms when this CGI must be killed
+
+        long long now_ms();
+        bool    is_cgi_script(const std::string &path);
+        bool    is_cgi_request();
+        bool    run_cgi(int epoll_fd, int timeout_ms);
+        void    finalize_cgi(bool eof_seen);
+        void    on_cgi_event(int epoll_fd, int fd, uint32_t events);
+        void    abort_cgi(int epoll_fd);
         int location_idx;
         bool cgi_bin;
         std::map<std::string , std::string> env_map;
