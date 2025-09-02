@@ -112,6 +112,7 @@ class Client
         HandleReq Hreq;
         // HandleRes Hres;
         std::string file_path;
+        
 
         // cgi 
         bool is_cgi_request();
@@ -143,6 +144,14 @@ class Client
         bool response_ready;
         int client_fd;
         void prepare_response();
+        ssize_t send_offset;
+        bool header_sent;
+        ssize_t header_size;
+        ssize_t total;
+        ssize_t remaining;
+        ssize_t send_len;
+        void sendError(int code);
+
 
         // methods
         bool isGET;

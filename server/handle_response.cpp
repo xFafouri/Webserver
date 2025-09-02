@@ -13,6 +13,7 @@ void Client::prepare_response()
     {
         std::cout << "GET METHOD " << std::endl;
         getMethod();
+        response_ready = true;
     }
     // else if (isDELETE)
     // {
@@ -29,35 +30,36 @@ void Client::prepare_response()
     }
 }
 
-
 bool Client::write_to_fd(int fd)
 {
     std::cout << ">> Attempting to write to fd\n";
-
-    if (!response_ready || response_buffer.empty()) 
+    std::cout << "response buffer size = " <<  response_buffer.size() << std::endl;
+    std::cout << "send_offset = " << send_offset << std::endl;
+    size_t remaining = response_buffer.size() - send_offset;
+    std::cout << " remaining = " << std::endl;
+    if (remaining == 0)
     {
-        std::cout << ">> Not ready to write yet\n";
-        return true; // Nothing to write yet
-    }
-
-    ssize_t sent = send(fd, response_buffer.c_str(), response_buffer.length(), 0);
-    std::cout << ">> Sent bytes: " << sent << "\n";
-
-    if (sent <= 0)
-    {
-        std::cerr << ">> Failed to send response or client closed connection\n";
-        return false;
-    }
-
-    if (static_cast<size_t>(sent) == response_buffer.length()) {
-        std::cout << ">> Response sent completely\n";
-        response_buffer.clear();
-        response_ready = false;
-        close(client_fd);
+        std::cout << "Done" << std::endl;
         return true;
     }
 
-    response_buffer = response_buffer.substr(sent);
-    std::cout << ">> Partial send. Remaining: " << response_buffer.length() << "\n";
-    return false;
+    ssize_t sent = send(fd, response_buffer.data() + send_offset, remaining, 0);
+    std::cout << "send ====>" << sent << std::endl;
+
+    if (sent > 0)
+    {
+        send_offset += sent;
+        return (send_offset == response_buffer.size());
+    }
+    else if (sent < 0)
+    {
+        std::cout << "// wait for next EPOLLOUT" << std::endl;
+        return false;
+    }
+    else
+    {
+        std::cout << "closed/error" << std::endl;
+        return true;
+    }
 }
+
