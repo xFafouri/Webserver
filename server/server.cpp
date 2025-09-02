@@ -40,6 +40,7 @@ Server::Server(const ServerCo& conf) : config(conf)
 
 Client::Client()
 {
+    send_offset = 0;
     cgi_bin = false;
     request_received = false;
     response_sent = false;
@@ -106,6 +107,7 @@ std::vector<std::string> spliting( std::string& s, std::string& delimiter)
 
 void Client::reset_for_next_request() 
 {
+    send_offset = 0;
     std::cout << "@@@@ Resetting client state for next request\n";
     Hreq.header.parsed = false;
     Hreq.header.method.clear();
@@ -228,6 +230,12 @@ std::string Client::ft_content_type(const std::string& full_path)
         return "text/csv";
     else if (full_path.find(".md") != std::string::npos)
         return "text/markdown";
+    else if (full_path.find(".py") != std::string::npos)
+        return "application/x-python-code";
+    else if (full_path.find(".php") != std::string::npos)
+        return "application/x-php";   
+    else if (full_path.find(".pl") != std::string::npos)
+        return "text/html";  
     else if (full_path.find(".yaml") != std::string::npos || full_path.find(".yml") != std::string::npos)
         return "application/x-yaml";
     else
@@ -270,11 +278,10 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
         memset(recv_buffer, 0, sizeof(recv_buffer));
     }
 
-
     std::string boundary;
     if (!Hreq.header.parsed)
     {
-        std::cout << "read_buffer = " << read_buffer << std::endl;
+        // std::cout << "read_buffer = " << read_buffer << std::endl;
         size_t header_end = read_buffer.find("\r\n\r\n");
         std::cerr << "[DEBUG] read_buffer size: " << read_buffer.size() << std::endl;
 
@@ -459,7 +466,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                 while (std::getline(pair_stream, pair, '&'))
                 {
                     // std::cout << "urlencoded3" << std::endl;
-                    std::cout << "cout = " <<  pair << std::endl;
+                    // std::cout << "cout = " <<  pair << std::endl;
                     size_t equal_pos = pair.find('=');
                     if (equal_pos != std::string::npos)
                     {
@@ -485,7 +492,8 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                     return PARSE_BAD_REQUEST;
                 }
                 boundary = "--" + Hreq.content_type.substr(pos + 9);
-                std::cout << "boundary = " <<  boundary << std::endl;
+                // std::cout << "boundary = " <<  boundary << std::endl;
+                std::cout << "body size = " << Hreq.body._body.size() << std::endl;
                 // boundary = "--" + Hreq.content_type.substr(Hreq.content_type.find("=") + 1,  Hreq.content_type.back()) + "\r\n";
                 std::vector<std::string> body_vector = spliting(Hreq.body._body, boundary);
                 std::cout << "multipart" << std::endl;
@@ -493,7 +501,7 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                 std::string filename;
                 std::string name;
                 std::string content;
-                std::cout << "Before content = " << content << std::endl;
+                // std::cout << "Before content = " << content << std::endl;
                 std::vector<std::string>::iterator it = body_vector.begin();
                 for(;it != body_vector.end(); it++)
                 {
@@ -519,11 +527,13 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                             {
                                 size_t end = part.find("\r\n");
                                 part =  part.substr(pos + 4, end - 1);
-                                std::cout << "Part = " << part;
+                                // std::cout << "Part = " << part;
                             }
-                            if (Hreq.method == "POST" && is_cgi == false)
+                            if (Hreq.method == "POST")
                             {
                                 std::string file_path = generate_temp_file_path();
+                                std::cout << "file_path = "  << file_path << std::endl;
+
                                 std::ofstream outfile(file_path.c_str());
                                 // std::cout << "part = " << part << std::endl;
                                 if (outfile.is_open()) 
@@ -551,17 +561,18 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                             if (pos != std::string::npos)
                             {
                                 std::string body_part = part.substr(pos + 4);
-                                std::cout << "body_part = " <<  body_part << std::endl;
+                                // std::cout << "body_part = " <<  body_part << std::endl;
                                 size_t boundary_end = body_part.rfind("\r\n");
-                                std::cout << " boundary_end = " << boundary_end << std::endl; 
+                                // std::cout << " boundary_end = " << boundary_end << std::endl; 
                                 if (boundary_end != std::string::npos)
                                 {
                                     body_part = body_part.substr(0, boundary_end);
                                 }
                                 
-                                if (Hreq.method == "POST" && is_cgi == false)
+                                if (Hreq.method == "POST")
                                 {
                                     file_path = generate_temp_file_path();
+                                    std::cout << "file_path = "  << file_path << std::endl;
                                     std::ofstream outfile(file_path.c_str());
                                     if (outfile.is_open()) 
                                     {
@@ -572,11 +583,11 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
                                 else {
                                     body_part.clear();
                                 }
-                                std::cout << "content = " << body_part;
+                                // std::cout << "content = " << body_part;
                             }
                         }
                     }
-                        std::cout << "body vector = " << *it << std::endl;
+                        // std::cout << "body vector = " << *it << std::endl;
                         part.clear();
                     }
                     Hreq.body.chunk_done = true;
