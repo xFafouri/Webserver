@@ -45,12 +45,14 @@ bool Client::is_cgi_request()
             }
         }
     }
-    // std::cout << "@@@@@@@HERE00@@@@@" << std::endl;
+    std::cout << "@@@@@@@HERE00@@@@@" << std::endl;
+    std::cout << "MMatchedLocation = " << matchedLocation->path << std::endl;
     if (!matchedLocation)
         return false;
+    std::cout << "@@@@@@@HERE---@@@@@" << std::endl;
     if (!matchedLocation->cgi_flag)
         return false;
-
+    std::cout << "@@@@@@@HERE---@@@@@" << std::endl;
     // 
     if (Hreq.uri == matchedLocation->path || Hreq.uri == matchedLocation->path + "/") 
     {
@@ -61,7 +63,7 @@ bool Client::is_cgi_request()
             {
                 script_file = index_path;
                 std::cout << script_file << std::endl;
-                // std::cout << "@@@@@@@HERE11@@@@@" << std::endl;
+                std::cout << "@@@@@@@HERE11@@@@@" << std::endl;
                 extension = ft_content_type_cgi(script_file);
                 cgi_bin = true;
                 map_ext[".php"] = matchedLocation->cgi.php;
@@ -70,7 +72,7 @@ bool Client::is_cgi_request()
                 return true;
             }
         }
-        // std::cout << "@@@@@@@HERE22@@@@@" << std::endl;
+        std::cout << "@@@@@@@HERE22@@@@@" << std::endl;
         return false; 
     }
 
@@ -81,15 +83,28 @@ bool Client::is_cgi_request()
             relative_uri.erase(0, 1);
 
         script_file = matchedLocation->root + "/" + relative_uri;
-
+        std::cout << "script file here = " <<  script_file << std::endl;
         std::cout << "here" << std::endl;
         size_t dot_pos = script_file.rfind('.');
+        size_t query_pos = script_file.find('?');
         std::cout << "pos = " << dot_pos << std::endl;
+        std::cout << "query_pos = " << query_pos << std::endl;
         if (dot_pos == std::string::npos)
             return false;
-
-        extension = script_file.substr(dot_pos);
-
+        if (query_pos != std::string::npos)
+        {
+            extension = script_file.substr(dot_pos,query_pos - dot_pos);
+            // extension = script_file.substr(dot_pos);
+            std::cout << "extension = " << extension <<  std::endl;
+        }
+        else 
+        {
+            // std::cout << "dot pos  = " <<dot_pos << std::endl;
+            extension = script_file.substr(dot_pos);
+            std::cout << "extension = " << extension <<  std::endl;
+        
+        }
+        // std::cout << "extenson = " << extension <<  std::endl;
         map_ext[".php"] = matchedLocation->cgi.php;
         map_ext[".py"]  = matchedLocation->cgi.py;
         map_ext[".pl"]  = matchedLocation->cgi.pl;
@@ -170,31 +185,31 @@ void Client::finalize_cgi(bool eof_seen)
 {
     cgi_state = CGI_DONE;
 
-    // Ensure child is reaped
     int status;
     waitpid(cgi_pid, &status, WNOHANG);
     cgi_pid = -1;
 
-    // Extract headers/body
     std::string headers, body;
     if (!cgi_hdr_parsed) 
     {
-        // No explicit headers: entire output is body, default type text/html
         headers.clear();
         body = cgi_raw;
         cgi_content_type = "text/html";
         cgi_content_len = static_cast<ssize_t>(body.size());
-    } else {
+    } 
+    else 
+    {
         headers = cgi_raw.substr(0, cgi_sep_pos);
         body    = (cgi_sep_pos + cgi_sep_len <= cgi_raw.size())
                     ? cgi_raw.substr(cgi_sep_pos + cgi_sep_len)
                     : std::string();
 
-        if (cgi_content_len < 0) {
-            // No Content-Length provided by CGI -> we use EOF length
+        if (cgi_content_len < 0) 
+        {
             cgi_content_len = static_cast<ssize_t>(body.size());
-        } else {
-            // If CGI wrote more than it declared, clamp body
+        } 
+        else 
+        {
             if (body.size() > static_cast<size_t>(cgi_content_len))
                 body.resize(static_cast<size_t>(cgi_content_len));
         }
@@ -202,12 +217,10 @@ void Client::finalize_cgi(bool eof_seen)
             cgi_content_type = "text/html";
     }
 
-    // Build HTTP response from parsed CGI headers (pass-through allowed except Status/CL/CT)
     std::ostringstream oss;
     // Status line
     oss << "HTTP/1.1 " << (cgi_status_line.empty() ? "200 OK" : cgi_status_line) << "\r\n";
 
-    // Propagate CGI headers except Status, Content-Length, Content-Type (we provide our own)
     {
         if (!headers.empty()) {
             std::istringstream hs(headers);
@@ -226,39 +239,47 @@ void Client::finalize_cgi(bool eof_seen)
         }
     }
 
-    // Our Content-Type and Content-Length
+    std::cout << "cgi_content_type " << cgi_content_type << std::endl;
+    std::cout << "cgi_content_length" << cgi_content_len << std::endl;
     oss << "Content-Type: " << cgi_content_type << "\r\n";
     oss << "Content-Length: " << cgi_content_len << "\r\n";
     oss << "\r\n";
     oss.write(body.data(), body.size());
 
     response_buffer = oss.str();
-    send_offset = 0;            // your existing partial-send machinery
-    response_ready = true;      // if you use this flag
+    send_offset = 0;            
+    // response_ready = true;     
 }
 
+void Client::refresh_deadline() 
+{
+    long current_time = now_ms();
+    if (cgi_deadline_ms) 
+    {
+        cgi_deadline_ms = current_time + current_time;  
+    } 
+    else {
+        cgi_deadline_ms = current_time + 5000;
+    }
+}
 
 void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
 {
     if (cgi_state == CGI_ERROR || cgi_state == CGI_DONE || cgi_state == CGI_TIMED_OUT) 
         return;
 
-    // Timeout is enforced by the server loop, but we can opportunistically refresh if we receive data
-    auto refresh_deadline = [&](){ cgi_deadline_ms = now_ms() + (cgi_deadline_ms ? (cgi_deadline_ms - (cgi_deadline_ms - now_ms())) : 5000); };
-
-    // 1) handle stdin (writing request body to CGI)
+    refresh_deadline();
     if (fd == cgi_stdin_fd) 
     {
         if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
         {
-            // Child closed stdin / error -> we can't write more. Close and stop watching.
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
             close(cgi_stdin_fd);
             cgi_stdin_fd = -1;
         } 
         else if (events & EPOLLOUT) 
         {
-            const std::string& body = Hreq.body._body; // unchunked by your HTTP parser
+            const std::string& body = Hreq.body._body;
             if (cgi_stdin_off < body.size()) 
             {
                 ssize_t n = write(cgi_stdin_fd, body.data() + cgi_stdin_off,
@@ -271,7 +292,6 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
             }
             if (cgi_stdin_off >= body.size()) 
             {
-                // done sending body: close stdin, stop watching
                 epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
                 close(cgi_stdin_fd);
                 cgi_stdin_fd = -1;
@@ -279,7 +299,6 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
         }
     }
 
-    // 2) handle stdout (reading CGI output)
     if (fd == cgi_stdout_fd) 
     {
         if (events & EPOLLIN) 
@@ -292,7 +311,6 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
                 {
                     cgi_raw.append(buf, n);
                     refresh_deadline();
-                    // Try to detect header/body split
                     if (!cgi_hdr_parsed) 
                     {
                         size_t p = cgi_raw.find("\r\n\r\n");
@@ -307,12 +325,10 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
                             cgi_hdr_parsed = true;
                             cgi_sep_pos = p;
                             cgi_sep_len = sep_len;
-                            // parse headers we have so far
                             const std::string hdrs = cgi_raw.substr(0, cgi_sep_pos);
                             parse_header_block(hdrs, cgi_status_line, cgi_content_type, cgi_content_len);
                         }
                     }
-                    // If we already know Content-Length, we can finalize once enough bytes are read
                     if (cgi_hdr_parsed && cgi_content_len >= 0) 
                     {
                         size_t have_body = (cgi_raw.size() > cgi_sep_pos + cgi_sep_len)
@@ -320,26 +336,22 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
                                              : 0;
                         if (have_body >= static_cast<size_t>(cgi_content_len)) 
                         {
-                            // We have all bytes the CGI promised. We can finish right now.
-                            // Stop watching stdout; close it; finalize.
                             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
                             close(cgi_stdout_fd);
                             cgi_stdout_fd = -1;
-                            finalize_cgi(/*eof=*/false);
+                            finalize_cgi(false);
                             return;
                         }
                     }
                 } else if (n == 0) 
                 {
-                    // EOF: child closed stdout. We can finalize (even without Content-Length).
                     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
                     close(cgi_stdout_fd);
                     cgi_stdout_fd = -1;
-                    finalize_cgi(/*eof=*/true);
+                    finalize_cgi(true);
                     return;
                 } 
                 else {
-                    // n < 0: don't spin. We'll wait for next EPOLLIN.
                     break;
                 }
             }
@@ -347,15 +359,15 @@ void Client::on_cgi_event(int epoll_fd, int fd, uint32_t events)
 
         if (events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) 
         {
-            // treat as EOF/error and finalize with whatever we have
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
             close(cgi_stdout_fd);
             cgi_stdout_fd = -1;
-            finalize_cgi(/*eof=*/true);
+            finalize_cgi(true);
             return;
         }
     }
 }
+
 
 void Client::abort_cgi(int epoll_fd)
 {
@@ -393,17 +405,57 @@ void Client::abort_cgi(int epoll_fd)
     response_ready  = true;
 }
 
-long long  Client::now_ms() 
+
+void Client::cleanup_cgi_fds(int epoll_fd) 
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()
-    ).count();
+    if (cgi_stdin_fd != -1) 
+    {
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdin_fd, NULL);
+        close(cgi_stdin_fd);
+        cgi_stdin_fd = -1;
+    }
+    if (cgi_stdout_fd != -1) 
+    {
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+        close(cgi_stdout_fd);
+        cgi_stdout_fd = -1;
+    }
+    if (cgi_pid > 0) 
+    {
+        kill(cgi_pid, SIGKILL);
+        waitpid(cgi_pid, NULL, 0);
+        cgi_pid = -1;
+    }
 }
+bool Client::is_valid_fd(int fd) 
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
+// long long  Client::now_ms() 
+// {
+//     return std::chrono::duration_cast<std::chrono::milliseconds>(
+//         std::chrono::steady_clock::now().time_since_epoch()
+//     ).count();
+// }
 
 bool    Client::run_cgi(int epoll_fd, int timeout_ms)
 {
+
+    if (cgi_state == CGI_ERROR || cgi_state == CGI_DONE || cgi_state == CGI_TIMED_OUT) 
+        return false ;
+
+    // Check if file descriptors are still valid
+    if ((client_fd == cgi_stdin_fd && !is_valid_fd(cgi_stdin_fd)) ||
+        (client_fd == cgi_stdout_fd && !is_valid_fd(cgi_stdout_fd))) {
+        cleanup_cgi_fds(epoll_fd);
+        cgi_state = CGI_ERROR;
+        return false ;
+    }
+
     long long start_time = now_ms();
     std::string query_string;
+    env_map.clear();
     env_map.insert(std::make_pair("REQUEST_METHOD", Hreq.method));
     env_map.insert(std::make_pair("SERVER_PROTOCOL", "HTTP/1.1"));
 
@@ -421,6 +473,7 @@ bool    Client::run_cgi(int epoll_fd, int timeout_ms)
         if (dot_pos != std::string::npos)
             query_string = Hreq.uri.substr(dot_pos + 1);
         env_map["QUERY_STRING"] = query_string;
+        std::cout << "query_string = " <<  query_string << std::endl;
         query_string = Hreq.uri.substr(dot_pos + 1);
         env_map.insert(std::make_pair("QUERY_STRING", query_string));
         //querystring
@@ -485,16 +538,18 @@ bool    Client::run_cgi(int epoll_fd, int timeout_ms)
     {
         close(in_pipe[0]); close(in_pipe[1]);
         close(out_pipe[0]); close(out_pipe[1]);
-        // return false;
+        return false;
     }
 
     if (pid == 0)
     {
-        // ---- child ----
+        alarm(10); 
         // stdin <- in_pipe[0], stdout -> out_pipe[1]
         dup2(in_pipe[0], STDIN_FILENO);
         dup2(out_pipe[1], STDOUT_FILENO);
 
+        for (int fd = 3; fd < 1024; ++fd) 
+            close(fd);
         close(in_pipe[1]);
         close(out_pipe[0]);
 
@@ -516,19 +571,16 @@ bool    Client::run_cgi(int epoll_fd, int timeout_ms)
     // register to epoll
     epoll_event ev;
 
-    // we always read CGI stdout
-    epoll_fd = epoll_create(1);
-
     ev.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
     ev.data.fd = cgi_stdout_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cgi_stdout_fd, &ev) == -1) 
     {
-        close(cgi_stdin_fd); close(cgi_stdout_fd);
+        close(cgi_stdin_fd); 
+        close(cgi_stdout_fd);
         cgi_stdin_fd = cgi_stdout_fd = -1;
-        // return false;
+        return false;
     }
 
-    // if POST body present, we need to write it to CGI stdin
     if (Hreq.method == "POST" && !Hreq.body._body.empty()) 
     {
         ev.events = EPOLLOUT | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
@@ -538,29 +590,29 @@ bool    Client::run_cgi(int epoll_fd, int timeout_ms)
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, nullptr);
             close(cgi_stdin_fd); close(cgi_stdout_fd);
             cgi_stdin_fd = cgi_stdout_fd = -1;
-            // return false;
+            return false;
         }
     } 
     else 
     {
-        // no body to send: close child's stdin immediately
         close(cgi_stdin_fd);
         cgi_stdin_fd = -1;
     }
-    
-    waitpid(pid, NULL, 0);
- 
+    for (int j = 0; j < i; ++j) 
+        delete[] envp[j];
+    delete[] envp;
+
      // initialize CGI state
-    cgi_state        = CGI_SPAWNED;
-    cgi_deadline_ms  = now_ms() + (timeout_ms > 0 ? (uint64_t)timeout_ms : 5000); // default 5s
+    cgi_state = CGI_IO;
+    cgi_deadline_ms = now_ms() + timeout_ms;
     cgi_raw.clear();
-    cgi_hdr_parsed   = false;
-    cgi_sep_pos      = std::string::npos;
-    cgi_sep_len      = 0;
-    cgi_status_line  = "200 OK";
+    cgi_hdr_parsed = false;
+    cgi_sep_pos = std::string::npos;
+    cgi_sep_len = 0;
+    cgi_status_line.clear();
     cgi_content_type.clear();
-    cgi_content_len  = -1;
-    cgi_stdin_off    = 0;
+    cgi_content_len = -1;
+    cgi_stdin_off = 0;
 
     // content_type = "binary/octet-stream";
  
@@ -568,3 +620,173 @@ bool    Client::run_cgi(int epoll_fd, int timeout_ms)
     // std::cout << "response_buffer = " <<  response_buffer << std::endl; 
 
 }
+
+/*
+bool Client::run_cgi(int epoll_fd, int timeout_ms)
+{
+    // Store client fd for later use
+    client_fd = ...; // You need to store the client fd in your Client class
+    
+    // Prepare environment
+    env_map.clear();
+    env_map["REQUEST_METHOD"] = Hreq.method;
+    env_map["SERVER_PROTOCOL"] = "HTTP/1.1";
+    env_map["SCRIPT_FILENAME"] = script_file;
+    env_map["REDIRECT_STATUS"] = "200";
+    env_map["GATEWAY_INTERFACE"] = "CGI/1.1";
+    env_map["SERVER_SOFTWARE"] = "42WebServer/1.0";
+    
+    // Add HTTP headers as environment variables
+    for (std::map<std::string, std::string>::const_iterator it = Hreq.header.map_header.begin();
+         it != Hreq.header.map_header.end(); ++it)
+    {
+        std::string env_name = "HTTP_" + it->first;
+        std::replace(env_name.begin(), env_name.end(), '-', '_');
+        std::transform(env_name.begin(), env_name.end(), env_name.begin(), ::toupper);
+        env_map[env_name] = it->second;
+    }
+
+    if (Hreq.method == "GET")
+    {
+        size_t query_pos = Hreq.uri.find('?');
+        if (query_pos != std::string::npos)
+        {
+            env_map["QUERY_STRING"] = Hreq.uri.substr(query_pos + 1);
+        }
+    }
+    else if (Hreq.method == "POST")
+    {
+        env_map["CONTENT_TYPE"] = Hreq.content_type;
+        env_map["CONTENT_LENGTH"] = std::to_string(Hreq.content_length);
+    }
+
+    // Prepare environment array
+    char **envp = new char*[env_map.size() + 1];
+    int i = 0;
+    for (std::map<std::string, std::string>::iterator it = env_map.begin(); 
+         it != env_map.end(); ++it, ++i)
+    {
+        std::string entry = it->first + "=" + it->second;
+        envp[i] = new char[entry.size() + 1];
+        strcpy(envp[i], entry.c_str());
+    }
+    envp[i] = NULL;
+
+    // Prepare argv
+    char *argv[] = {
+        (char*)map_ext[extension].c_str(),
+        (char*)script_file.c_str(),
+        NULL
+    };
+
+    // Create pipes
+    int in_pipe[2];
+    int out_pipe[2];
+    if (pipe(in_pipe) == -1 || pipe(out_pipe) == -1)
+    {
+        // Cleanup envp
+        for (int j = 0; j < i; ++j) delete[] envp[j];
+        delete[] envp;
+        return false;
+    }
+
+    // Fork
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        close(in_pipe[0]); close(in_pipe[1]);
+        close(out_pipe[0]); close(out_pipe[1]);
+        for (int j = 0; j < i; ++j) delete[] envp[j];
+        delete[] envp;
+        return false;
+    }
+
+    if (pid == 0)
+    {
+        // Child process
+        dup2(in_pipe[0], STDIN_FILENO);
+        dup2(out_pipe[1], STDOUT_FILENO);
+        
+        close(in_pipe[1]);
+        close(out_pipe[0]);
+        
+        // Close all other file descriptors
+        for (int fd = 3; fd < 1024; ++fd) close(fd);
+        
+        // Change to script directory if needed
+        std::string script_dir = script_file.substr(0, script_file.find_last_of('/'));
+        if (!script_dir.empty()) {
+            chdir(script_dir.c_str());
+        }
+        
+        execve(argv[0], argv, envp);
+        exit(1); // If execve fails
+    }
+
+    // Parent process
+    cgi_pid = pid;
+    cgi_stdin_fd = in_pipe[1];
+    cgi_stdout_fd = out_pipe[0];
+    
+    close(in_pipe[0]);
+    close(out_pipe[1]);
+    
+    // Set non-blocking
+    fcntl(cgi_stdin_fd, F_SETFL, O_NONBLOCK);
+    fcntl(cgi_stdout_fd, F_SETFL, O_NONBLOCK);
+
+    // Add CGI fds to epoll
+    struct epoll_event ev;
+    
+    // Always monitor stdout for reading
+    ev.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
+    ev.data.fd = cgi_stdout_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cgi_stdout_fd, &ev) == -1)
+    {
+        close(cgi_stdin_fd);
+        close(cgi_stdout_fd);
+        for (int j = 0; j < i; ++j) delete[] envp[j];
+        delete[] envp;
+        return false;
+    }
+
+    // Monitor stdin for writing if we have POST data
+    if (Hreq.method == "POST" && !Hreq.body._body.empty())
+    {
+        ev.events = EPOLLOUT | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
+        ev.data.fd = cgi_stdin_fd;
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, cgi_stdin_fd, &ev) == -1)
+        {
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cgi_stdout_fd, NULL);
+            close(cgi_stdin_fd);
+            close(cgi_stdout_fd);
+            for (int j = 0; j < i; ++j) delete[] envp[j];
+            delete[] envp;
+            return false;
+        }
+    }
+    else
+    {
+        // No data to write, close stdin
+        close(cgi_stdin_fd);
+        cgi_stdin_fd = -1;
+    }
+
+    // Cleanup envp
+    for (int j = 0; j < i; ++j) delete[] envp[j];
+    delete[] envp;
+
+    // Initialize CGI state
+    cgi_state = CGI_IO;
+    cgi_deadline_ms = now_ms() + timeout_ms;
+    cgi_raw.clear();
+    cgi_hdr_parsed = false;
+    cgi_sep_pos = std::string::npos;
+    cgi_sep_len = 0;
+    cgi_status_line.clear();
+    cgi_content_type.clear();
+    cgi_content_len = -1;
+    cgi_stdin_off = 0;
+
+    return true;
+}*/

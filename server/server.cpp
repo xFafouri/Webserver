@@ -448,8 +448,10 @@ RequestParseStatus Client::read_from_fd(int client_fd, long long max_body_size)
 
         if (is_cgi_request()) 
         {
+            std::cout << "is_cgi_request" << std::endl;
             if (is_cgi_script(script_file)) 
             {
+                std::cout << "is_cgi_script" << std::endl;
                 is_cgi = true;
             } 
             else 
