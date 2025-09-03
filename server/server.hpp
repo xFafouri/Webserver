@@ -10,7 +10,6 @@
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <vector>
 
 #include <algorithm>
@@ -21,6 +20,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <sys/types.h>
+#include <unistd.h>
+#include <chrono>
 
 #include <cstddef>
 #include <cstdlib>
@@ -85,16 +87,12 @@ class Header
         bool parsed = false;
 };
 
-// ---- Client.hpp additions ----
-#include <sys/types.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <chrono>
 
-enum CgiState {
+enum CgiState 
+{
     CGI_IDLE = 0,
     CGI_SPAWNED,
-    CGI_IO,          // sending POST 
+    CGI_IO,
     CGI_DONE,
     CGI_ERROR,
     CGI_TIMED_OUT
@@ -115,7 +113,8 @@ enum RequestParseStatus
 };
 
 
-class Body {
+class Body 
+{
     public:
         std::string raw_body;
         std::string data;
@@ -167,27 +166,36 @@ class Client
         
 
         // cgi
+        void cleanup_cgi_fds(int epoll_fd);
+
+        bool is_valid_fd(int fd);
+
         pid_t       cgi_pid       = -1;
-        int         cgi_stdin_fd  = -1;  // parent writes request body to this (child's STDIN)
-        int         cgi_stdout_fd = -1;  // parent reads CGI output from this (child's STDOUT)
-        size_t      cgi_stdin_off = 0;   // how many bytes of request body already written
+        int         cgi_stdin_fd  = -1;
+        int         cgi_stdout_fd = -1;
+        size_t      cgi_stdin_off = 0;
         CgiState    cgi_state     = CGI_IDLE;
 
-        // CGI accumulation buffers
         std::string cgi_raw;
         bool        cgi_hdr_parsed = false;
-        size_t      cgi_sep_pos    = std::string::npos; // "\r\n\r\n" (or "\n\n") split index
+        size_t      cgi_sep_pos    = std::string::npos;
         size_t      cgi_sep_len    = 0;
 
-        // Parsed header info
-        std::string cgi_status_line;     // e.g. "200 OK" (fall back if no Status header)
-        std::string cgi_content_type;    // from Content-Type header
-        ssize_t     cgi_content_len = -1;// from Content-Length header or -1 if absent
+        // Parsed header cgi
+        std::string cgi_status_line;
+        std::string cgi_content_type;
+        ssize_t     cgi_content_len = -1;
 
         // Deadline
-        uint64_t    cgi_deadline_ms = 0; // monotonic ms when this CGI must be killed
+        uint64_t    cgi_deadline_ms = 0;
 
-        long long now_ms();
+        static long long now_ms() 
+        {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+            ).count();
+        }
+        void    refresh_deadline();
         bool    is_cgi_script(const std::string &path);
         bool    is_cgi_request();
         bool    run_cgi(int epoll_fd, int timeout_ms);

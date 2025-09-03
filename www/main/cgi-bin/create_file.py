@@ -3,7 +3,7 @@ import socket
 import time
 
 HOST = "127.0.0.1"
-PORT = 8080
+PORT = 3434
 TIMEOUT = 5   # seconds
 
 def run_server():

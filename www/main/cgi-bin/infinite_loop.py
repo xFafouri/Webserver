@@ -5,9 +5,9 @@ import time
 
 # Standard CGI header
 print("Content-Type: text/plain\r\n\r\n")
-print("Starting infinite loop... (this should hang without timeout)")
+print("Starting infinite loop... ")
 
 # Infinite loop
 while True:
-    time.sleep(1)  # prevent 100% CPU usage
     print("Still looping...", flush=True)
+    time.sleep(5)  # prevent 100% CPU usage
