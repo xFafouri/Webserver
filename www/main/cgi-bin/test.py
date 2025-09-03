@@ -5,7 +5,7 @@ import cgitb
 cgitb.enable()  # Enable debugging
 
 print("Content-Type: text/html\n")
-
+print()
 form = cgi.FieldStorage()
 name = form.getvalue("name", "Guest")
 email = form.getvalue("email", "")
