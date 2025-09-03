@@ -16,8 +16,10 @@ std::string ft_content_type_cgi(const std::string& full_path)
 
 bool Client::is_cgi_script(const std::string &path) 
 {
-    static const std::vector<std::string> cgi_exts = {".py", ".pl", ".cgi"};
+    static const std::vector<std::string> cgi_exts = {".py", ".pl", ".php"};
     
+    if (extension ==  ".py" || extension == ".py" || extension == ".pl")
+        return true;
     for (size_t i = 0; i < cgi_exts.size(); i++) 
     {
         if (path.size() >= cgi_exts[i].size() &&
@@ -95,7 +97,8 @@ bool Client::is_cgi_request()
         {
             extension = script_file.substr(dot_pos,query_pos - dot_pos);
             // extension = script_file.substr(dot_pos);
-            std::cout << "extension = " << extension <<  std::endl;
+            script_file = script_file.substr(0,query_pos);
+            std::cout << "extension1 = " << extension <<  std::endl;
         }
         else 
         {
