@@ -4,7 +4,7 @@
 =======
 #include <sys/types.h>
 
-std::string normalize_path(const std::string &path)
+std::string Client::normalize_path(const std::string &path)
 {
     std::string result;
     bool check = false;
