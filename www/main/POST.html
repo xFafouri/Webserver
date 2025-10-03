@@ -1,75 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Document</title>
-	<style>
-		@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+  <meta charset="UTF-8">
+  <title>POST Method Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
 
-		.container{
-			/*--max-width: 1215px;*/
-			--max-width: 1000px;
-			--padding: 1rem;
+    .container {
+      background: #fff;
+      padding: 25px 30px;
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      width: 350px;
+      text-align: center;
+    }
 
-			width: min(var(--max-width), 100% - (var(--padding) * 1.2));
-			margin-inline: auto;
-		}
-		body {
-			display: flex;
-			justify-content: center;
-			align-items: center;
-			height: 100vh;
-			font-family: 'Inter', sans-serif;
-			background-color: #f0f0f0;
-		}
-		div {
-			font-size: 2rem;
-			font-weight: semibold;
-			color: #333;
-			text-align: center;
-		}
-		/* confetti */
-		canvas {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			z-index: 9999;
-		}
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
 
-		.button{
-			margin-top: 2rem;
-			border: none;
-			padding: 1rem 3rem;
-			background-color: #333;
-			border-radius: 15px;
-			font-weight: semibold;
-			color: #f0f0f0;
-		}
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      text-align: left;
+      color: #555;
+    }
 
-		form{
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-		}
-	</style>
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    input[type="submit"] {
+      margin-top: 15px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: #4CAF50;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    input[type="submit"]:hover {
+      background: #45a049;
+    }
+
+    .message {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #4CAF50;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-	<div class="container">
-		<h2>Create file.txt on the server</h2>
-		<form action="/create_file" method="post" enctype="multipart/form-data">
-			<label for="filename">Nom du fichier :</label>
-			<input type="text" id="filename" filename="filename" required>
-			<br>
-			<label for="content">Contenu du fichier :</label>
-			<textarea id="content" filename="content" rows="2" cols="50" required></textarea>
-			<br>
-			<input class="button" type="submit" value="Create file">
-		</form>
-	</div>
+  <div class="container">
+    <h2>POST Method Test</h2>
+    <form id="uploadForm" action="/upload" method="post">
+      <label for="username">Username:</label>
+      <input type="text" id="username" name="username" required>
+
+      <label for="message">Message:</label>
+      <input type="text" id="message" name="message" required>
+
+      <input type="submit" value="Send POST">
+    </form>
+
+    <div id="successMessage" class="message">
+      ✅ Data sent successfully!
+    </div>
+  </div>
+  <!-- <script>
+  const form = document.getElementById("uploadForm");
+  const successMessage = document.getElementById("successMessage");
+
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault(); // prevent normal reload
+
+    const formData = new URLSearchParams(new FormData(form));
+
+    try {
+      let response = await fetch(form.action, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: formData.toString()
+      });
+
+      if (response.ok) {
+        successMessage.style.display = "block";
+        successMessage.style.color = "#4CAF50";
+        successMessage.textContent = "✅ Data sent successfully!";
+        alert("✅ Data sent successfully!");
+        form.reset();
+      } else {
+        successMessage.style.display = "block";
+        successMessage.style.color = "red";
+        successMessage.textContent = "❌ Sending failed!";
+        alert("❌ Sending failed!");
+      }
+    } catch (error) {
+      successMessage.style.display = "block";
+      successMessage.style.color = "red";
+      successMessage.textContent = "⚠️ Error: " + error.message;
+      alert("⚠️ Error: " + error.message);
+    }
+  });
+</script> -->
+
+<script>
+const form = document.getElementById("uploadForm");
+const successMessage = document.getElementById("successMessage");
+
+form.addEventListener("submit", async function (event) {
+  event.preventDefault(); // prevent normal reload
+  successMessage.style.display = "none";
+
+  const formData = new URLSearchParams(new FormData(form));
+
+  try {
+    let response = await fetch(form.action, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formData.toString()
+    });
+
+    if (response.ok) {
+      successMessage.style.display = "block";
+      successMessage.style.color = "#4CAF50";
+      successMessage.textContent = "✅ Data sent successfully!";
+      alert("✅ Data sent successfully!");
+      form.reset();
+    } else {
+      // Handle specific HTTP status codes
+      let msg;
+      switch (response.status) {
+        case 403:
+          msg = "❌ Error 403: Forbidden!";
+          break;
+        case 404:
+          msg = "❌ Error 404: Not Found!";
+          break;
+        case 405:
+          msg = "❌ Error 405: Method Not Allowed!";
+          break;
+        case 500:
+          msg = "❌ Error 500: Internal Server Error!";
+          break;
+        default:
+          msg = `❌ Error ${response.status}: ${response.statusText}`;
+      }
+      successMessage.style.display = "block";
+      successMessage.style.color = "red";
+      successMessage.textContent = msg;
+      alert(msg);
+    }
+  } catch (error) {
+    successMessage.style.display = "block";
+    successMessage.style.color = "red";
+    successMessage.textContent = "⚠️ Network Error: " + error.message;
+    alert("⚠️ Network Error: " + error.message);
+  }
+});
+</script>
+
 </body>
-<script src="confetti.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
 </html>

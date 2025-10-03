@@ -3,6 +3,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <unistd.h>
 
 class cgi_class
 {

@@ -42,6 +42,8 @@ static bool    check_is_digit(std::string string)
     return true;
 }
 
+
+
 static bool    check_is_body_size(std::string string)
 {
     for (size_t i = 0; i < string.size(); i++)
@@ -50,7 +52,6 @@ static bool    check_is_body_size(std::string string)
             return false;
         else if (!isdigit(string[i]) && string[i + 1] == '\0')
         {
-            // std::cout << "here\n";
             if (string[i] == 'M')
                 return true;
             else
@@ -88,26 +89,45 @@ static long long ft_atoi(const char *str)
 	return (factorial * sign);
 }
 
-void ServerCo::printf_server()
-{
-    // std::cout << "here\n";
-    std::cout << "listen is --> " << listen <<std::endl;
-    std::cout << "host is -->" << host <<std::endl;
-    for (size_t i = 0; i < server_names.size(); i++)
-    {
-        std::cout << "server name is  "<< i + 1 << "-->" << server_names[i] << std::endl;
+std::vector<std::string> split(const std::string& str, char delim) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream stream(str);
+    
+    while (getline(stream, token, delim)) {
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
     }
-    std::cout << "client max body size is --> " << client_max_body_size <<std::endl;
-    for (std::map<int, std::string>::iterator it = error_pages.begin(); it != error_pages.end(); it++)
-    {
-        std::cout << it->first << " --> " << it->second << std::endl;
-    }
+    return tokens;
+}
 
-    for(size_t i = 0; i < locations.size(); i++)
+
+static bool check_host(const std::string& host_p)
+{
+    const char *str = host_p.c_str();
+    int check = 0;
+    if(strcmp("dump-ubuntu-benguerir",str) == 0 || strcmp("localhost",str) == 0)
+        return true;
+    else
     {
-        std::cout << "..... location .........\n";
-        locations[i].print_location();
+        if(str[0] == '.')
+            return false;
+        for (size_t i = 0; i < strlen(str); i++)
+        {
+            if(str[i] == '.' && check == 0)
+                check = 1;
+            else if(str[i] == '.' && check == 1)
+                return false;
+            else if(str[i] != '.')
+                check = 0;
+            if(!isdigit(str[i]) && str[i] != '.')
+                return false;
+        }
+        if(str[strlen(str) - 1] == '.' || split(host_p,'.').size() != 4)
+            return false;
     }
+    return true;
 }
 
 bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
@@ -119,6 +139,8 @@ bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
         // std::cout << tokens[index] << std::endl;
         if (tokens[index] == "listen")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'listen' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("Missing ';' at the end of listen directive");
             if (listen_seen)
@@ -129,17 +151,24 @@ bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
                         listen = ft_atoi(tokens[index + 1].c_str());
                 else
                     throw std::runtime_error("Error for parsing1");
+                if (listen < 1 || listen > 65535)
+                    throw std::runtime_error("Invalid port: must be between 1 and 65535");
                 listen_seen = true;
             }
             index += 2;
-
         }
         else if (tokens[index] == "host")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'host' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("Missing ';' at the end of host directive");
             if (host_seen)
                     throw std::runtime_error("Duplicate 'host' directive found.");
+            else if  (check_host(tokens[index + 1]) == false)
+            {
+                    throw std::runtime_error("Error: Invalid host. Host must be 'localhost', 'dump-ubuntu-benguerir', or a valid IP address."); 
+            }
             else
             {
                 host = tokens[index + 1];
@@ -175,12 +204,13 @@ bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
             
             }
         
-            // After loop, we must be at the semicolon
-            if (tokens[index] != ";")
+            if (index >= tokens.size() || tokens[index] != ";")
                 throw std::runtime_error("Missing ';' at the end of server_name directive");
         }
         else if (tokens[index] == "error_page")
         {
+            if (index + 3 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'error_page' directive");
             if (tokens[index + 3] != ";")
                 throw std::runtime_error("Missing ';' at the end of Error page directive");
             if (check_is_digit(tokens[index + 1]) == true)
@@ -191,6 +221,8 @@ bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
         }
         else if (tokens[index] == "client_max_body_size")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'client_max_body_size' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("Missing ';' at the end of client max body size directive");
             index++;
@@ -209,16 +241,22 @@ bool    ServerCo::parsServer(std::vector<std::string> &tokens, size_t &index)
         {
             Location location;
             index++;
+            if (index >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'location' directive");
             if (tokens[index] == "{")
                 throw std::runtime_error("Invalid or missing path after 'location'.");
+            if (index + 1 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'location' directive");
             if (tokens[index + 1] != "{")
                 throw std::runtime_error("error for parsing your location must has a '{' ");
             if (location.parser_location(index, tokens) == true)
+            {
                 locations.push_back(location);
+            }
             else
                 throw std::runtime_error("Expected '}' at the end of location block");
         }
-        else if (tokens[index] == "}" && (tokens[index + 1] == "server" || index + 1 == tokens.size()))
+        else if (tokens[index] == "}" && ( (index + 1 < tokens.size() && tokens[index + 1] == "server") || index + 1 == tokens.size()))
         {
             validate();
             return true;

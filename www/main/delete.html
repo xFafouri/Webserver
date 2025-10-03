@@ -1,88 +1,95 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete Resource</title>
+    <title>Test DELETE</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-
-        .container{
-            --max-width: 1000px;
-            --padding: 1rem;
-
-            width: min(var(--max-width), 100% - (var(--padding) * 1.2));
-            margin-inline: auto;
+        /* Reset some default styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
+
         body {
+            background: #f0f2f5;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f0f0;
-        }
-        div {
-            font-size: 1.5rem;
-            font-weight: semibold;
             color: #333;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 2rem;
+            color: #222;
             text-align: center;
         }
-        .button{
+
+        /* Container for the form */
+        #deleteForm {
+            background: #fff;
+            padding: 30px 40px;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Style input */
+        input[type="text"] {
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: #007BFF;
+            outline: none;
+        }
+
+        /* Style button */
+        button {
+            padding: 12px 15px;
+            background-color: #007BFF;
+            color: white;
             border: none;
-            padding: 1rem 3rem;
-            background-color: #333;
-            border-radius: 15px;
-            font-weight: semibold;
-            color: #f0f0f0;
+            border-radius: 6px;
+            font-size: 1.1rem;
             cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Delete a Resource</h2>
-        <form id="deleteForm">
-            <label for="resource">Select a resource to delete:</label>
-            <select id="resource" name="resource">
-                <option value="tata.txt">tata.txt</option>
-                <option value="titi.txt">titi.txt</option>
-                <option value="toto.txt">toto.txt</option>
-            </select>
-            <br><br>
-            <button type="button" class="button" onclick="deleteResource()">Delete</button>
-        </form>
-        <p id="responseMessage"></p>
-    </div>
-		<script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+    <h1>Test DELETE Request</h1>
+    <form id="deleteForm">
+        <input type="text" name="file" placeholder="File to delete" value="testfile.txt" />
+        <button type="button" onclick="sendDelete()">Delete</button>
+    </form>
 
-<script>
-				const jsConfetti = new JSConfetti()
-        function deleteResource() {
-            const resource = document.getElementById('resource').value;
-            
-            fetch('./cgi-bin/delete_resource.py?resource=' + encodeURIComponent(resource), {
-                method: 'DELETE',
+    <script>
+        function sendDelete() {
+            const file = document.querySelector('input[name="file"]').value;
+            fetch(`/${file}`, {
+                method: 'DELETE'
             })
-            .then(response => response.text())
-            .then(data => {
-
-								// si le mot error est dans la reponse, on affiche une erreur
-								if (data.includes('error') || data.includes('not exist')) {
-									document.getElementById('responseMessage').innerText = data;
-									jsConfetti.addConfetti({
-											emojis: ['❌'],
-									})
-									return;
-								}
-
-								jsConfetti.addConfetti({
-									confettiColors: ['#ff00ff', '#00ffff'],
-									confettiRadius: 8,
-								})
-                document.getElementById('responseMessage').innerText = data;
-
+            .then(response => {
+                alert(`Status: ${response.status} ${response.statusText}`);
             })
+            .catch(err => alert('Error: ' + err));
         }
     </script>
 </body>

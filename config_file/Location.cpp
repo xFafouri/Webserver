@@ -7,6 +7,8 @@
 Location::Location()
 {
     autoindex = false;
+    upload_flag = false;
+    cgi_flag = true;
 }
 
 void fill_methods(std::map<std::string, bool> &methods)
@@ -72,15 +74,18 @@ void Location::print_location()
 
 bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
 {
+    if (index >= tokens.size())
+        throw std::runtime_error("Unexpected end of tokens at start of location block");
     path = tokens[index];
     if (path == "{" || path == "}" || path == ";" || path.empty() || path[0] != '/')
         throw std::runtime_error("Invalid location path: '" + path + "'. Location path must start with '/'.");
     index += 2;
     for(;index < tokens.size(); index++)
     {
-        // std::cout << tokens[index] << std::endl;
         if (tokens[index] == "root")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'root' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("error for parsing");
             root = tokens[index + 1];
@@ -109,11 +114,13 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
                 }
                 index++;
             }
-            if (tokens[index] != ";")
+            if (index >= tokens.size() || tokens[index] != ";")
                 throw std::runtime_error("Missing ';' at the end of server_name directive");
         }
         else if (tokens[index] == "autoindex")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'autoindex' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("error for parsing for autoindex");
             if (tokens[index + 1] == "on")
@@ -121,11 +128,27 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
             else if (tokens[index + 1] == "off")
                 autoindex = false;
             else
-                throw std::runtime_error("Your autoindex must be 'TRUE' or 'FALSE'");
+                throw std::runtime_error("Your autoindex must be 'on' or 'off'");
+            index += 2;
+        }
+        else if (tokens[index] == "upload_flag")
+        {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'upload flag' directive");
+            if (tokens[index + 2] != ";")
+                throw std::runtime_error("error for parsing for autoindex");
+            if (tokens[index + 1] == "on")
+                upload_flag = true;
+            else if (tokens[index + 1] == "off")
+                upload_flag = false;
+            else
+                throw std::runtime_error("Your upload flag must be 'on' or 'off'");
             index += 2;
         }
         else if (tokens[index] == "upload_store")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'upload store' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("Missing ';' at the end of upload store directive");
             else
@@ -188,10 +211,11 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
                     throw std::runtime_error("Invalid method '" + tokens[index] + "' in 'allowed_methods'");
                 index++;
             }
-            // std::cout << tokens[index] << std::endl;
         }
         else if (tokens[index] == "return")
         {
+            if (index + 3 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'return' directive");
             if (tokens[index + 3] != ";" )
                 throw std::runtime_error("Missing ';' after return directive");
             if (check_is_digit(tokens[index + 1]) == false)
@@ -202,14 +226,16 @@ bool Location::parser_location(size_t &index, std::vector<std::string> &tokens)
         else if (tokens[index] == "cgi_pass")
         {
             index++;
-            if (tokens[index] != "{")
-                throw std::runtime_error("error for parsing your cgi must has a '{' ");
+            if (index >= tokens.size() || tokens[index] != "{")
+                throw std::runtime_error("Expected '{' after cgi_pass");
             cgi_class temp;
             if (temp.parse_cgi(tokens, index) == true)
                 cgi = temp;
         }
         else if (tokens[index] == "cgi_flag")
         {
+            if (index + 2 >= tokens.size())
+                throw std::runtime_error("Unexpected end of tokens near 'cgi flag' directive");
             if (tokens[index + 2] != ";")
                 throw std::runtime_error("error for parsing for autoindex");
             if (tokens[index + 1] == "on")

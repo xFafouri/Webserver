@@ -1,0 +1,145 @@
+/* ---------- Smooth Autoindex with Emojis ---------- */
+
+:root {
+    --bg: #f0f4f8;
+    --card-bg: #ffffff;
+    --text: #1f2937;
+    --muted: #64748b;
+    --link: #2563eb;
+    --link-hover: #1d4ed8;
+    --border: #e2e8f0;
+    --shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.index-card {
+    max-width: 900px;
+    width: 100%;
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.index-header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, #fefefe, #f3f4f6);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.index-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.index-header h1::before {
+    content: "📂";
+    font-size: 26px;
+}
+.index-header small {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* ---------- List ---------- */
+.index-list {
+    list-style: none;
+}
+
+.index-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    transition: transform 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+}
+.index-item:last-child { border-bottom: none; }
+
+.index-item:hover {
+    background: rgba(37, 99, 235, 0.06);
+    transform: translateX(4px);
+}
+
+/* ---------- Link ---------- */
+.index-item a {
+    text-decoration: none;
+    color: var(--link);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.15s ease;
+}
+.index-item a:hover { color: var(--link-hover); }
+
+/* ---------- File info ---------- */
+.item-size, .item-date {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* ---------- Emoji Icons ---------- */
+/* Folders */
+.index-item a[href$="/"]::before { content: "📁"; }
+/* Parent dir */
+.index-item a[href="../"]::before,
+.index-item a[href="/"]::before { content: "🔙"; }
+/* Images */
+.index-item a[href$=".png" i],
+.index-item a[href$=".jpg" i],
+.index-item a[href$=".jpeg" i],
+.index-item a[href$=".gif" i],
+.index-item a[href$=".svg" i],
+.index-item a[href$=".webp" i] { content: "🖼️"; }
+/* Videos */
+.index-item a[href$=".mp4" i],
+.index-item a[href$=".mov" i],
+.index-item a[href$=".avi" i],
+.index-item a[href$=".mkv" i],
+.index-item a[href$=".webm" i] { content: "🎬"; }
+/* Audio */
+.index-item a[href$=".mp3" i],
+.index-item a[href$=".wav" i],
+.index-item a[href$=".flac" i],
+.index-item a[href$=".ogg" i] { content: "🎵"; }
+/* Archives */
+.index-item a[href$=".zip" i],
+.index-item a[href$=".tar" i],
+.index-item a[href$=".gz" i],
+.index-item a[href$=".7z" i] { content: "📦"; }
+/* Code */
+.index-item a[href$=".c" i],
+.index-item a[href$=".cpp" i],
+.index-item a[href$=".h" i],
+.index-item a[href$=".py" i],
+.index-item a[href$=".js" i],
+.index-item a[href$=".html" i],
+.index-item a[href$=".css" i],
+.index-item a[href$=".json" i],
+.index-item a[href$=".sh" i] { content: "💻"; }
+/* Default file */
+.index-item a::before { content: "📄"; }

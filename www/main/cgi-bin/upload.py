@@ -1,71 +1,167 @@
+# #!/usr/bin/env python3
+# # -*- coding: utf-8 -*-
+
+# import cgi
+# import os
+# import cgitb
+
+# # Enable detailed error reports
+# cgitb.enable()
+
+# upload_dir = "www/main/uploads"
+# os.makedirs(upload_dir, exist_ok=True)
+
+# # Parse form data
+# form = cgi.FieldStorage()
+
+# print("Content-Type: text/html; charset=utf-8")
+# print()
+
+# value = ""
+
+# if "file" in form:
+#     file_item = form["file"]
+
+#     if file_item.filename:
+#         filename = os.path.basename(file_item.filename)
+#         filepath = os.path.join(upload_dir, filename)
+
+#         try:
+#             with open(filepath, "wb") as f:
+#                 while True:
+#                     chunk = file_item.file.read(1024)
+#                     if not chunk:
+#                         break
+#                     f.write(chunk)
+
+#             value = f"✅ Le fichier <b>{filename}</b> a été uploadé avec succès.<br>📂 Enregistré à : <code>{filepath}</code>"
+#         except Exception as e:
+#             value = f"❌ Erreur lors de l'enregistrement du fichier : {e}"
+#     else:
+#         value = "⚠️ Aucun fichier n'a été sélectionné."
+# else:
+#     value = "⚠️ Aucun champ 'file' trouvé dans le formulaire."
+
+# # Return HTML page
+# html_content = f"""
+# <!DOCTYPE html>
+# <html lang="fr">
+# <head>
+#     <meta charset="UTF-8">
+#     <title>Résultat Upload</title>
+#     <style>
+#         body {{
+#             font-family: 'Inter', sans-serif;
+#             background-color: #f0f0f0;
+#             display: flex;
+#             justify-content: center;
+#             align-items: center;
+#             height: 100vh;
+#             color: #333;
+#         }}
+#         .container {{
+#             text-align: center;
+#             background: #fff;
+#             padding: 2rem;
+#             border-radius: 12px;
+#             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+#         }}
+#         a {{
+#             display: inline-block;
+#             margin-top: 1rem;
+#             text-decoration: none;
+#             color: #007BFF;
+#         }}
+#     </style>
+# </head>
+# <body>
+#     <div class="container">
+#         <h2>Résultat de l'upload</h2>
+#         <p>{value}</p>
+#         <a href="/">⬅ Retour à l'accueil</a>
+#     </div>
+# </body>
+# </html>
+# """
+
+# print(html_content)
+
+
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import cgi
 import os
 import cgitb
 
-cgitb.enable()
+cgitb.enable()  # Detailed error reporting in browser console (optional)
 
-upload_dir = "./www/main/cgi-bin/uploads/"
+# Helper function to return HTML page with a JS alert
+def show_alert(message, title="Upload Result"):
+    print("Content-Type: text/html; charset=utf-8")
+    print()
+    print(f"""
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <title>{title}</title>
+        <script>
+            alert("{message}");
+        </script>
+    </head>
+    <body>
+        <h2>{title}</h2>
+        <p>{message}</p>
+        <a href='/'>⬅ Retour à l'accueil</a>
+    </body>
+    </html>
+    """)
+    exit(0)
 
-form = cgi.FieldStorage()
+try:
+    # Only allow POST requests
+    if os.environ.get("REQUEST_METHOD") != "POST":
+        show_alert("⚠️ Méthode non autorisée ! Seules les requêtes POST sont acceptées.", "405 Method Not Allowed")
 
-file_item = form['file']
+    # Upload directory relative to CGI script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    upload_dir = os.path.abspath(os.path.join(script_dir, "..", "uploads"))
 
-print("Content-Type: text/html; charset=utf-8")
-print()
+    # Ensure upload directory exists
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except PermissionError:
+        show_alert(f"❌ Permission refusée pour créer le dossier d'uploads : {upload_dir}", "403 Forbidden")
 
-if file_item.filename:
+    # Parse form data
+    form = cgi.FieldStorage()
+    if "file" not in form:
+        show_alert("⚠️ Aucun fichier sélectionné ou champ 'file' manquant.", "400 Bad Request")
+
+    file_item = form["file"]
+    if not file_item.filename:
+        show_alert("⚠️ Aucun fichier n'a été sélectionné.", "400 Bad Request")
+
+    # Save the uploaded file
     filename = os.path.basename(file_item.filename)
     filepath = os.path.join(upload_dir, filename)
 
     try:
-        with open(filepath, 'wb') as output_file:
+        with open(filepath, "wb") as f:
             while True:
                 chunk = file_item.file.read(1024)
                 if not chunk:
                     break
-                output_file.write(chunk)
+                f.write(chunk)
+        # Success alert
+        show_alert(f"✅ Le fichier '{filename}' a été uploadé avec succès à : {filepath}", "Upload Réussi")
 
-        value = f"'{filename}' a été uploader avec succès et enregistré à '{upload_dir}'"
+    except PermissionError:
+        show_alert(f"❌ Permission refusée pour écrire dans : {upload_dir}", "403 Forbidden")
     except Exception as e:
-        value = f"Erreur lors de l'enregistrement du fichier : {e}"
-else:
-    value = "Aucun fichier n'a été téléchargé."
+        show_alert(f"❌ Erreur lors de l'enregistrement du fichier : {e}", "500 Internal Server Error")
 
-
-
-html_content = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-
-        body {{
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f0f0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #333;
-        }}
-        .container {{
-            text-align: center;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-				<h2> {value} </h2>
-				<a href="/">Back home</a>
-    </div>
-</body>
-</html>
-"""
-
-
-print(html_content)
+except Exception as e:
+    # Unexpected errors
+    show_alert(f"⚠️ Une erreur inattendue est survenue : {e}", "500 Internal Server Error")

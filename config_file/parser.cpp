@@ -1,6 +1,35 @@
 #include "parser.hpp"
 #include <stdexcept>
 
+void Parser::check_hosting_port(std::vector<ServerCo> servers)
+{
+    for(size_t i = 0; i < servers.size() ; i++)
+    {
+        for(size_t j = i + 1; j < servers.size(); j++)
+        {
+            if ((servers[i].host == servers[j].host) && (servers[i].listen == servers[j].listen))
+            {
+                if (servers[i].server_names.empty() && servers[j].server_names.empty())
+                {
+                    throw std::runtime_error("Configuration Error: Duplicate server definition detected.\n"
+                        "  - server_name: 'empty' \n"
+                        "  - listen: " + to_string(servers[i].listen) + "\n"
+                        "  - host: " + servers[i].host + "\n\n"
+                        "Each server must have a unique combination of server_name, listen, and host.");
+                }
+                else if ((!servers[i].server_names.empty() && !servers[j].server_names.empty()) && (servers[i].server_names[0] == servers[j].server_names[0]))
+                {
+                    throw std::runtime_error("Configuration Error: Duplicate server definition detected.\n"
+                        "  - server_name: " + servers[i].server_names[0] + "\n"
+                        "  - listen: " + to_string(servers[i].listen) + "\n"
+                        "  - host: " + servers[i].host + "\n\n"
+                        "Each server must have a unique combination of server_name, listen, and host.");
+                }
+            }
+        }
+    }
+}
+
 void    Parser::parsing(std::string fileName)
 {
     std::ifstream file(fileName.c_str());
@@ -33,7 +62,7 @@ void    Parser::parsing(std::string fileName)
                         tokens.push_back(token);
                         token.clear();
                     }
-                    tokens.push_back(std::string(1 ,c)); // push { or } or ;
+                    tokens.push_back(std::string(1 ,c));
                 }
                 else
                     token += c;
@@ -42,16 +71,14 @@ void    Parser::parsing(std::string fileName)
                 tokens.push_back(token);
 
         }
-        // for(size_t i = 0; i < tokens.size(); i++)
-        // {
-        //     std::cout << tokens[i] << std::endl;
-        // }
+        if (tokens.empty())
+            throw std::runtime_error("Error: Config file is empty!11");
         file.close();
         parse();
     }
     else
     {
-        std::cout << "Failed to open file." << std::endl;
+        throw std::runtime_error("Failed to open file.");
     }
 }
 
@@ -81,9 +108,5 @@ void    Parser::parse()
             throw std::runtime_error("Error : for block of servers");
         i++;
     }
-    // for(size_t i = 0;i < servers.size(); i++)
-    // {
-    //     std::cout << "Server number ["  << i + 1 << "]"<< std::endl;
-    //     servers[i].printf_server();
-    // }
+        check_hosting_port(servers);
 }

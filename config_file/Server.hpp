@@ -5,6 +5,12 @@
 #include <iostream>
 #include <map>
 #include "Location.hpp"
+#include <string>
+#include <vector>
+#include <map>
+#include <string.h>
+#include <sstream>
+#include <iostream>
 
 
 class locations;
