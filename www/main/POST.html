@@ -3,13 +3,15 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Upload File Info</title>
+	<title>Document</title>
 	<style>
 		@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
-		.container {
-			--max-width: 600px;
+		.container{
+			/*--max-width: 1215px;*/
+			--max-width: 1000px;
 			--padding: 1rem;
+
 			width: min(var(--max-width), 100% - (var(--padding) * 1.2));
 			margin-inline: auto;
 		}
@@ -21,49 +23,53 @@
 			font-family: 'Inter', sans-serif;
 			background-color: #f0f0f0;
 		}
-		h2 {
-			margin-bottom: 1rem;
+		div {
+			font-size: 2rem;
+			font-weight: semibold;
 			color: #333;
+			text-align: center;
 		}
-		label {
-			display: block;
-			margin: 0.5rem 0 0.2rem;
-			font-weight: 600;
-		}
-		input[type="text"] {
+		/* confetti */
+		canvas {
+			position: fixed;
+			top: 0;
+			left: 0;
 			width: 100%;
-			padding: 0.5rem;
-			border: 1px solid #ccc;
-			border-radius: 8px;
+			height: 100%;
+			z-index: 9999;
 		}
-		.button {
-			margin-top: 1.5rem;
+
+		.button{
+			margin-top: 2rem;
 			border: none;
-			padding: 0.8rem 2rem;
+			padding: 1rem 3rem;
 			background-color: #333;
-			border-radius: 12px;
-			font-weight: 600;
+			border-radius: 15px;
+			font-weight: semibold;
 			color: #f0f0f0;
-			cursor: pointer;
 		}
-		form {
+
+		form{
 			display: flex;
 			flex-direction: column;
+			align-items: center;
 		}
 	</style>
 </head>
 <body>
 	<div class="container">
-		<h2>Send File Information</h2>
-		<form action="./cgi-bin/create_file.py" method="post">
-			<label for="username">Votre nom :</label>
-			<input type="text" id="username" name="username" required>
-
+		<h2>Create file.txt on the server</h2>
+		<form action="/create_file" method="post" enctype="multipart/form-data">
 			<label for="filename">Nom du fichier :</label>
-			<input type="text" id="filename" name="filename" required>
-
-			<input class="button" type="submit" value="Envoyer">
+			<input type="text" id="filename" filename="filename" required>
+			<br>
+			<label for="content">Contenu du fichier :</label>
+			<textarea id="content" filename="content" rows="2" cols="50" required></textarea>
+			<br>
+			<input class="button" type="submit" value="Create file">
 		</form>
 	</div>
 </body>
+<script src="confetti.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
 </html>
